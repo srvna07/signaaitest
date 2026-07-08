@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { TestCaseForm, TestCaseFormData } from '../../components/TestCaseForm';
 
 export function TestCaseDetail() {
-  const { id } = useParams<{ id: string }>();
+  const { id, projectId } = useParams<{ id: string; projectId: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [testCase, setTestCase] = useState<TestCase | null>(null);
@@ -55,7 +55,7 @@ export function TestCaseDetail() {
     try {
       const res = await apiClient.delete<ApiResponse<unknown>>(`/test-cases/${id}`);
       if (res.success) {
-        navigate('/test-cases');
+        navigate(`/projects/${projectId}/test-cases`);
       } else {
         setGlobalError(res.error || 'Failed to delete test case');
       }
@@ -102,7 +102,7 @@ export function TestCaseDetail() {
     <div className="page-container">
       <div className="toolbar">
         <div className="toolbar-left">
-          <Link to="/test-cases" style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
+          <Link to={`/projects/${projectId}/test-cases`} style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
             <ChevronLeft size={20} />
           </Link>
           <h2>{testCase.title}</h2>

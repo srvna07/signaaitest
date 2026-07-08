@@ -12,6 +12,7 @@ const stepSchema = z.object({
 });
 
 const createSchema = z.object({
+  projectId: z.string().uuid('Invalid project ID'),
   title: z.string().min(1, 'Title is required'),
   type: z.nativeEnum(TestCaseType, { errorMap: () => ({ message: 'type must be UI or API' }) }),
   steps: z.array(stepSchema).min(1, 'At least one step is required'),
@@ -20,9 +21,10 @@ const createSchema = z.object({
   requirementId: z.string().uuid('requirementId must be a valid UUID').optional(),
 });
 
-const updateSchema = createSchema.partial();
+const updateSchema = createSchema.omit({ projectId: true }).partial();
 
 const listQuerySchema = z.object({
+  projectId: z.string().uuid('Invalid project ID').optional(),
   requirementId: z.string().uuid('requirementId must be a valid UUID').optional(),
   type: z.nativeEnum(TestCaseType).optional(),
   page: z.coerce.number().int().positive().default(1),
@@ -55,8 +57,9 @@ export async function listTestCases(req: Request, res: Response): Promise<void> 
     return;
   }
 
-  const { requirementId, type, page, limit } = parsed.data;
+  const { projectId, requirementId, type, page, limit } = parsed.data;
   const where = {
+    ...(projectId !== undefined && { projectId }),
     ...(requirementId !== undefined && { requirementId }),
     ...(type !== undefined && { type }),
   };

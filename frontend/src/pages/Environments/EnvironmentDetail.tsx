@@ -6,7 +6,7 @@ import { ApiResponse, Environment } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 
 export function EnvironmentDetail() {
-  const { id } = useParams<{ id: string }>();
+  const { id, projectId } = useParams<{ id: string; projectId: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [environment, setEnvironment] = useState<Environment | null>(null);
@@ -94,7 +94,7 @@ export function EnvironmentDetail() {
     try {
       const res = await apiClient.delete<ApiResponse<unknown>>(`/environments/${id}`);
       if (res.success) {
-        navigate('/environments');
+        navigate(`/projects/${projectId}/environments`);
       } else {
         setError(res.error || 'Failed to delete environment');
       }
@@ -111,7 +111,7 @@ export function EnvironmentDetail() {
     <div className="page-container">
       <div className="toolbar">
         <div className="toolbar-left">
-          <Link to="/environments" style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
+          <Link to={`/projects/${projectId}/environments`} style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
             <ChevronLeft size={20} />
           </Link>
           <h2>{environment.name}</h2>

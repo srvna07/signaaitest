@@ -6,11 +6,12 @@ import { GeminiProvider } from '../ai/providers/GeminiProvider';
 // ─── Validation schemas ───────────────────────────────────────────────────────
 
 const createSchema = z.object({
+  projectId: z.string().uuid('Invalid project ID'),
   title: z.string().min(1, 'Title is required'),
   description: z.string().min(1, 'Description is required'),
 });
 
-const updateSchema = createSchema.partial();
+const updateSchema = createSchema.omit({ projectId: true }).partial();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -37,8 +38,12 @@ const includeCount = { _count: { select: { testCases: true } } } as const;
 // ─── Controllers ─────────────────────────────────────────────────────────────
 
 /** GET /api/requirements */
-export async function listRequirements(_req: Request, res: Response): Promise<void> {
+export async function listRequirements(req: Request, res: Response): Promise<void> {
+  const projectId = req.query.projectId as string;
+  const where = projectId ? { projectId } : {};
+
   const rows = await prisma.requirement.findMany({
+    where,
     orderBy: { createdAt: 'desc' },
     include: { ...includeCreator, ...includeCount },
   });

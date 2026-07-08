@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { apiClient } from '../../lib/apiClient';
 import { ApiResponse, TestCase } from '../../types';
@@ -7,6 +7,7 @@ import { TestCaseForm, TestCaseFormData } from '../../components/TestCaseForm';
 
 export function TestCaseNew() {
   const navigate = useNavigate();
+  const { projectId } = useParams<{ projectId: string }>();
   const [globalError, setGlobalError] = useState('');
 
   const handleSubmit = async (data: TestCaseFormData) => {
@@ -18,6 +19,7 @@ export function TestCaseNew() {
     }));
 
     const res = await apiClient.post<ApiResponse<TestCase>>('/test-cases', {
+      projectId,
       title: data.title,
       type: data.type,
       requirementId: data.requirementId || undefined,
@@ -27,7 +29,7 @@ export function TestCaseNew() {
     });
 
     if (res.success && res.data) {
-      navigate(`/test-cases/${res.data.id}`);
+      navigate(`/projects/${projectId}/test-cases/${res.data.id}`);
     } else {
       throw new Error(res.error || 'Failed to create test case');
     }
@@ -37,7 +39,7 @@ export function TestCaseNew() {
     <div className="page-container">
       <div className="toolbar">
         <div className="toolbar-left">
-          <Link to="/test-cases" style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
+          <Link to={`/projects/${projectId}/test-cases`} style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
             <ChevronLeft size={20} />
           </Link>
           <h2>New Test Case</h2>

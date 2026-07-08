@@ -6,12 +6,13 @@ import { prisma } from '../config/prisma';
 // ─── Validation schemas ───────────────────────────────────────────────────────
 
 const createSchema = z.object({
+  projectId: z.string().uuid('Invalid project ID'),
   name: z.string().min(1, 'Name is required'),
   baseUrl: z.string().url('baseUrl must be a valid URL'),
   variables: z.record(z.string()).optional().default({}),
 });
 
-const updateSchema = createSchema.partial();
+const updateSchema = createSchema.omit({ projectId: true }).partial();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -27,8 +28,12 @@ async function writeAuditLog(
 // ─── Controllers ─────────────────────────────────────────────────────────────
 
 /** GET /api/environments */
-export async function listEnvironments(_req: Request, res: Response): Promise<void> {
+export async function listEnvironments(req: Request, res: Response): Promise<void> {
+  const projectId = req.query.projectId as string;
+  const where = projectId ? { projectId } : {};
+
   const environments = await prisma.environment.findMany({
+    where,
     orderBy: { createdAt: 'desc' },
     include: { creator: { select: { id: true, name: true, email: true } } },
   });

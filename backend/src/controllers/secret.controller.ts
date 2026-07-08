@@ -5,6 +5,7 @@ import { encryptSecret, decryptSecret } from '../utils/crypto';
 
 // Schemas
 const createSecretSchema = z.object({
+  projectId: z.string().uuid('Invalid project ID'),
   name: z.string().min(1, 'Name is required'),
   value: z.string().min(1, 'Value is required'),
   environmentId: z.string().uuid('Valid Environment ID is required'),
@@ -17,19 +18,20 @@ const updateSecretSchema = z.object({
 // Controllers
 export const getSecrets = async (req: Request, res: Response): Promise<void> => {
   try {
-    const environmentId = req.query.environment_id as string;
+    const environmentId = req.query.environment_id as string | undefined;
+    const projectId = req.query.projectId as string | undefined;
 
-    if (!environmentId) {
-      res.status(400).json({ success: false, error: 'environment_id query parameter is required' });
-      return;
-    }
+    const where: any = {};
+    if (environmentId) where.environmentId = environmentId;
+    if (projectId) where.projectId = projectId;
 
     const secrets = await prisma.secret.findMany({
-      where: { environmentId },
+      where,
       select: {
         id: true,
         name: true,
         environmentId: true,
+        projectId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -80,7 +82,7 @@ export const createSecret = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const { name, value, environmentId } = parsed.data;
+    const { name, value, environmentId, projectId } = parsed.data;
 
     // Verify environment exists
     const env = await prisma.environment.findUnique({ where: { id: environmentId } });
@@ -114,12 +116,14 @@ export const createSecret = async (req: Request, res: Response): Promise<void> =
         name,
         encryptedValue,
         environmentId,
+        projectId,
         createdBy: req.user!.userId,
       },
       select: {
         id: true,
         name: true,
         environmentId: true,
+        projectId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -167,6 +171,7 @@ export const updateSecret = async (req: Request, res: Response): Promise<void> =
         id: true,
         name: true,
         environmentId: true,
+        projectId: true,
         createdAt: true,
         updatedAt: true,
       },

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { RefreshCcw, Edit, Trash2 } from 'lucide-react';
 import { apiClient } from '../../lib/apiClient';
 import { ApiResponse, Requirement } from '../../types';
@@ -15,11 +15,14 @@ export function Requirements() {
   const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
   const canDelete = user?.role === 'ADMIN';
 
+  const { projectId } = useParams<{ projectId: string }>();
+
   const fetchReqs = async () => {
+    if (!projectId) return;
     setLoading(true);
     setError('');
     try {
-      const res = await apiClient.get<ApiResponse<Requirement[]>>('/requirements');
+      const res = await apiClient.get<ApiResponse<Requirement[]>>(`/requirements?projectId=${projectId}`);
       if (res.success && res.data) {
         setRequirements(res.data);
       } else {
@@ -33,8 +36,8 @@ export function Requirements() {
   };
 
   useEffect(() => {
-    fetchReqs();
-  }, []);
+    if (projectId) fetchReqs();
+  }, [projectId]);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();

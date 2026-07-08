@@ -1,22 +1,49 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { LayoutDashboard, FileCheck2, Server, LogOut, CheckSquare } from 'lucide-react';
+import { LayoutDashboard, FileCheck2, Server, LogOut, FolderGit2 } from 'lucide-react';
 import styles from './Layout.module.css';
+import { useEffect, useState } from 'react';
+import { apiClient } from '../../lib/apiClient';
+import { ApiResponse } from '../../types';
+
+interface Project {
+  id: string;
+  name: string;
+}
 
 export function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { projectId } = useParams<{ projectId: string }>();
+  const [project, setProject] = useState<Project | null>(null);
+
+  useEffect(() => {
+    if (projectId) {
+      apiClient.get<ApiResponse<Project>>(`/projects/${projectId}`).then((res) => {
+        if (res.success && res.data) {
+          setProject(res.data);
+        }
+      });
+    }
+  }, [projectId]);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
+  if (!projectId) return null;
+
   return (
     <div className={styles.layout}>
       <aside className={styles.sidebar}>
-        <div className={styles.sidebarHeader}>
-          <CheckSquare className={styles.logoIcon} />
+        <div 
+          className={styles.sidebarHeader}
+          onClick={() => navigate('/')}
+          style={{ cursor: 'pointer' }}
+          title="Back to All Projects"
+        >
+          <FolderGit2 className={styles.logoIcon} />
           <span className={styles.logoText}>Signa AI Test</span>
         </div>
 
@@ -24,7 +51,7 @@ export function Layout() {
           <div className={styles.navSection}>
             <div className={styles.navSectionTitle}>TEST MANAGEMENT</div>
             <NavLink
-              to="/test-cases"
+              to={`/projects/${projectId}/test-cases`}
               className={({ isActive }) =>
                 `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
               }
@@ -33,7 +60,7 @@ export function Layout() {
               <span>Test Cases</span>
             </NavLink>
             <NavLink
-              to="/requirements"
+              to={`/projects/${projectId}/requirements`}
               className={({ isActive }) =>
                 `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
               }
@@ -46,7 +73,7 @@ export function Layout() {
           <div className={styles.navSection}>
             <div className={styles.navSectionTitle}>INFRASTRUCTURE</div>
             <NavLink
-              to="/environments"
+              to={`/projects/${projectId}/environments`}
               className={({ isActive }) =>
                 `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
               }
@@ -60,7 +87,14 @@ export function Layout() {
 
       <main className={styles.main}>
         <header className={styles.header}>
-          <div className={styles.headerLeft}>{/* Breadcrumbs or page title could go here */}</div>
+          <div className={styles.headerLeft}>
+            {project && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 500 }}>
+                <span style={{ color: 'var(--color-text-muted)' }}>Project /</span>
+                <span style={{ color: 'var(--color-text)' }}>{project.name}</span>
+              </div>
+            )}
+          </div>
           <div className={styles.headerRight}>
             <div className={styles.userInfo}>
               <span className={styles.userName}>{user?.name || user?.email}</span>

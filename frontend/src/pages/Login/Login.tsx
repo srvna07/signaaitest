@@ -26,7 +26,7 @@ export function Login() {
 
       if (res.success && res.data) {
         login(res.data.token, res.data.user);
-        navigate('/test-cases');
+        navigate('/');
       } else {
         setError(res.error || 'Login failed');
       }

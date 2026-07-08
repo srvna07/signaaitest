@@ -20,7 +20,7 @@ interface GeneratedTestCase {
 }
 
 export function RequirementDetail() {
-  const { id } = useParams<{ id: string }>();
+  const { id, projectId } = useParams<{ id: string; projectId: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [requirement, setRequirement] = useState<Requirement | null>(null);
@@ -66,7 +66,7 @@ export function RequirementDetail() {
       try {
         const [reqRes, envRes] = await Promise.all([
           apiClient.get<ApiResponse<Requirement>>(`/requirements/${id}`),
-          apiClient.get<ApiResponse<Environment[]>>('/environments'),
+          apiClient.get<ApiResponse<Environment[]>>(`/environments?projectId=${projectId}`),
         ]);
 
         if (reqRes.success && reqRes.data) {
@@ -136,7 +136,7 @@ export function RequirementDetail() {
     try {
       const res = await apiClient.delete<ApiResponse<unknown>>(`/requirements/${id}`);
       if (res.success) {
-        navigate('/requirements');
+        navigate(`/projects/${projectId}/requirements`);
       } else {
         setError(res.error || 'Failed to delete requirement');
       }
@@ -157,7 +157,7 @@ export function RequirementDetail() {
       if (mode === 'text') {
         const res = await apiClient.post<ApiResponse<GeneratedTestCase[]>>(
           `/requirements/${id}/generate-test-cases`,
-          {},
+          { projectId },
         );
         if (res.success && res.data) {
           // Filter locally based on scope if needed, or pass scope to backend.
@@ -180,6 +180,7 @@ export function RequirementDetail() {
           environmentId: selectedEnvId,
           path: explorePath,
           scope: generationScope,
+          projectId,
         });
         if (res.success && res.data) {
           setGeneratedCases(res.data);
@@ -208,6 +209,7 @@ export function RequirementDetail() {
       .map((tc) => ({
         ...tc,
         requirementId: id,
+        projectId,
       }));
 
     try {
@@ -247,7 +249,7 @@ export function RequirementDetail() {
     <div className="page-container">
       <div className="toolbar">
         <div className="toolbar-left">
-          <Link to="/requirements" style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
+          <Link to={`/projects/${projectId}/requirements`} style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
             <ChevronLeft size={20} />
           </Link>
           <h2>{requirement.title}</h2>

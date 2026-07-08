@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Plus, RefreshCcw, Edit, Trash2 } from 'lucide-react';
 import { apiClient } from '../../lib/apiClient';
 import { ApiResponse, TestCase } from '../../types';
@@ -16,12 +16,15 @@ export function TestCases() {
   const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
   const canDelete = user?.role === 'ADMIN';
 
+  const { projectId } = useParams<{ projectId: string }>();
+
   const fetchTestCases = async () => {
+    if (!projectId) return;
     setLoading(true);
     setError('');
     setSelectedIds(new Set());
     try {
-      const res = await apiClient.get<ApiResponse<TestCase[]>>('/test-cases');
+      const res = await apiClient.get<ApiResponse<TestCase[]>>(`/test-cases?projectId=${projectId}`);
       if (res.success && res.data) {
         setTestCases(res.data);
       } else {
@@ -35,8 +38,10 @@ export function TestCases() {
   };
 
   useEffect(() => {
-    fetchTestCases();
-  }, []);
+    if (projectId) {
+      fetchTestCases();
+    }
+  }, [projectId]);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
