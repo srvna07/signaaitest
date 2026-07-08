@@ -1,0 +1,31 @@
+import { Router } from 'express';
+import { Role } from '@prisma/client';
+import { authenticate } from '../middlewares/authenticate';
+import { authorize } from '../middlewares/authorize';
+import {
+  listRequirements,
+  getRequirement,
+  createRequirement,
+  updateRequirement,
+  deleteRequirement,
+} from '../controllers/requirement.controller';
+
+const router = Router();
+
+router.use(authenticate);
+
+router.get('/', (req, res) => void listRequirements(req, res));
+router.get('/:id', (req, res) => void getRequirement(req, res));
+router.post(
+  '/',
+  authorize(Role.ADMIN, Role.EDITOR),
+  (req, res) => void createRequirement(req, res),
+);
+router.put(
+  '/:id',
+  authorize(Role.ADMIN, Role.EDITOR),
+  (req, res) => void updateRequirement(req, res),
+);
+router.delete('/:id', authorize(Role.ADMIN), (req, res) => void deleteRequirement(req, res));
+
+export default router;
