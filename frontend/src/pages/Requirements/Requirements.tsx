@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { RefreshCcw } from 'lucide-react';
 import { apiClient } from '../../lib/apiClient';
 import { ApiResponse, Requirement } from '../../types';
@@ -7,6 +8,7 @@ export function Requirements() {
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   const fetchReqs = async () => {
     setLoading(true);
@@ -67,7 +69,12 @@ export function Requirements() {
               </tr>
             ) : (
               requirements.map((req) => (
-                <tr key={req.id}>
+                <tr
+                  key={req.id}
+                  onClick={() => navigate(`/requirements/${req.id}`)}
+                  style={{ cursor: 'pointer' }}
+                  className="hover-row"
+                >
                   <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                     {req.id.split('-')[0]}
                   </td>
