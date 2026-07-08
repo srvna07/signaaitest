@@ -206,3 +206,28 @@ export async function bulkCreateTestCases(req: Request, res: Response): Promise<
 
   res.status(201).json({ success: true, data: createdTestCases });
 }
+
+/** POST /api/test-cases/bulk-delete */
+export async function bulkDeleteTestCases(req: Request, res: Response): Promise<void> {
+  const parsed = z.object({ ids: z.array(z.string().uuid()) }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: parsed.error.errors[0]?.message });
+    return;
+  }
+
+  const { ids } = parsed.data;
+  if (ids.length === 0) {
+    res.json({ success: true, data: { count: 0 } });
+    return;
+  }
+
+  const userId = req.user!.userId;
+
+  // Use a transaction if possible, or just deleteMany
+  const result = await prisma.testCase.deleteMany({
+    where: { id: { in: ids } },
+  });
+
+  await writeAuditLog(userId, 'bulk_delete', 'TestCase', 'bulk_operation');
+  res.json({ success: true, data: { count: result.count } });
+}

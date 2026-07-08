@@ -9,6 +9,7 @@ export function TestCases() {
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -18,6 +19,7 @@ export function TestCases() {
   const fetchTestCases = async () => {
     setLoading(true);
     setError('');
+    setSelectedIds(new Set());
     try {
       const res = await apiClient.get<ApiResponse<TestCase[]>>('/test-cases');
       if (res.success && res.data) {
@@ -51,9 +53,43 @@ export function TestCases() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete ${selectedIds.size} test cases?`)) return;
+    try {
+      const res = await apiClient.post<ApiResponse<unknown>>('/test-cases/bulk-delete', {
+        ids: Array.from(selectedIds),
+      });
+      if (res.success) {
+        fetchTestCases();
+      } else {
+        setError(res.error || 'Failed to delete test cases');
+      }
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Error deleting test cases');
+    }
+  };
+
   const handleEdit = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     navigate(`/test-cases/${id}?edit=true`);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === testCases.length && testCases.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(testCases.map((tc) => tc.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
   };
 
   return (
@@ -65,7 +101,25 @@ export function TestCases() {
             <RefreshCcw size={16} />
           </button>
         </div>
-        <div className="toolbar-right">
+        <div
+          className="toolbar-right"
+          style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}
+        >
+          {canDelete && selectedIds.size > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              className="btn-secondary"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                color: '#dc2626',
+                borderColor: '#fca5a5',
+              }}
+            >
+              <Trash2 size={16} /> Delete Selected ({selectedIds.size})
+            </button>
+          )}
           {canEdit && (
             <Link to="/test-cases/new" className="btn-primary">
               <Plus size={16} /> New Test Case
@@ -80,6 +134,15 @@ export function TestCases() {
         <table className="data-table">
           <thead>
             <tr>
+              <th style={{ width: '40px', textAlign: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={selectedIds.size === testCases.length && testCases.length > 0}
+                  onChange={toggleSelectAll}
+                  style={{ cursor: 'pointer' }}
+                  title="Select All"
+                />
+              </th>
               <th>ID</th>
               <th>Title</th>
               <th>Type</th>
@@ -91,15 +154,23 @@ export function TestCases() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6}>Loading...</td>
+                <td colSpan={7}>Loading...</td>
               </tr>
             ) : testCases.length === 0 ? (
               <tr>
-                <td colSpan={6}>No test cases found.</td>
+                <td colSpan={7}>No test cases found.</td>
               </tr>
             ) : (
               testCases.map((tc) => (
                 <tr key={tc.id}>
+                  <td style={{ textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(tc.id)}
+                      onChange={() => toggleSelect(tc.id)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </td>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                     <Link to={`/test-cases/${tc.id}`}>{tc.id.split('-')[0]}</Link>
                   </td>

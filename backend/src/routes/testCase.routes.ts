@@ -9,6 +9,7 @@ import {
   updateTestCase,
   deleteTestCase,
   bulkCreateTestCases,
+  bulkDeleteTestCases,
 } from '../controllers/testCase.controller';
 
 const router = Router();
@@ -20,6 +21,11 @@ router.post(
   '/bulk',
   authorize(Role.ADMIN, Role.EDITOR),
   (req, res) => void bulkCreateTestCases(req, res),
+);
+router.post(
+  '/bulk-delete',
+  authorize(Role.ADMIN),
+  (req, res) => void bulkDeleteTestCases(req, res),
 );
 router.get('/:id', (req, res) => void getTestCase(req, res));
 router.post('/', authorize(Role.ADMIN, Role.EDITOR), (req, res) => void createTestCase(req, res));
