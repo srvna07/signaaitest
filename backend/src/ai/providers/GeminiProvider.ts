@@ -8,6 +8,7 @@ const testCaseSchema = z.object({
   preconditions: z.string().optional(),
   steps: z.array(
     z.object({
+      order: z.number().int().positive(),
       action: z.string(),
       expected: z.string().optional(),
     }),
@@ -19,7 +20,12 @@ const generatedTestCasesSchema = z.array(testCaseSchema);
 
 export class GeminiProvider implements AIProvider {
   private genAI: GoogleGenerativeAI;
-  private modelName = 'gemini-1.5-flash';
+  // We use the '-latest' alias rather than pinning a specific version (like gemini-1.5-flash)
+  // to ensure we always have access to Google's current recommended fast model without
+  // hardcoding a version that will eventually be deprecated.
+  // If stability/reproducibility becomes more important than having the newest model,
+  // this can be pinned to a specific dated version instead (check https://ai.google.dev/gemini-api/docs/models).
+  private modelName = 'gemini-flash-latest';
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -45,12 +51,13 @@ The output MUST be a JSON array of objects conforming exactly to this structure:
     "title": "A short descriptive title",
     "type": "UI" or "API",
     "preconditions": "Optional preconditions for this test",
-    "steps": [
-      {
-        "action": "What to do",
-        "expected": "Optional expected outcome of this step"
-      }
-    ],
+      "steps": [
+        {
+          "order": 1,
+          "action": "What to do",
+          "expected": "Optional expected outcome of this step"
+        }
+      ],
     "expectedResult": "The final expected result"
   }
 ]

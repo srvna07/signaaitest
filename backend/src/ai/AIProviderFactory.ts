@@ -1,5 +1,6 @@
 import { AIProvider } from './AIProvider';
 import { GeminiProvider } from './providers/GeminiProvider';
+import { GroqProvider } from './providers/GroqProvider';
 
 export class AIProviderFactory {
   /**
@@ -11,6 +12,8 @@ export class AIProviderFactory {
     switch (providerName.toLowerCase()) {
       case 'gemini':
         return new GeminiProvider();
+      case 'groq':
+        return new GroqProvider();
       default:
         throw new Error(`Unsupported AI provider: ${providerName}`);
     }

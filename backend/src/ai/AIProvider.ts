@@ -1,4 +1,5 @@
 export interface GeneratedTestCaseStep {
+  order: number;
   action: string;
   expected?: string;
 }
