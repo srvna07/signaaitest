@@ -16,7 +16,19 @@ async function main(): Promise<void> {
     },
   });
 
+  const viewerUser = await prisma.user.upsert({
+    where: { email: 'viewer@signa-ai.test' },
+    update: { role: Role.VIEWER },
+    create: {
+      email: 'viewer@signa-ai.test',
+      password: await bcrypt.hash('Viewer@1234', 12),
+      name: 'Viewer',
+      role: Role.VIEWER,
+    },
+  });
+
   console.log(`✅ User seeded: ${adminUser.email} (id: ${adminUser.id})`); // eslint-disable-line no-console
+  console.log(`✅ User seeded: ${viewerUser.email} (id: ${viewerUser.id})`); // eslint-disable-line no-console
 
   // ── Sample Environment ──────────────────────────────────────────────────────
   const localEnv = await prisma.environment.upsert({

@@ -3,12 +3,19 @@ import { useParams, Link } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { apiClient } from '../../lib/apiClient';
 import { ApiResponse, TestCase } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
+import { TestCaseForm, TestCaseFormData } from '../../components/TestCaseForm';
 
 export function TestCaseDetail() {
   const { id } = useParams<{ id: string }>();
   const [testCase, setTestCase] = useState<TestCase | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [globalError, setGlobalError] = useState('');
+  const { user } = useAuth();
+
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
 
   useEffect(() => {
     const fetchTestCase = async () => {
@@ -28,6 +35,31 @@ export function TestCaseDetail() {
     fetchTestCase();
   }, [id]);
 
+  const handleUpdate = async (data: TestCaseFormData) => {
+    setGlobalError('');
+    const formattedSteps = data.steps.map((s, i) => ({
+      order: i + 1,
+      action: s.action,
+      expected: s.expected || undefined,
+    }));
+
+    const res = await apiClient.put<ApiResponse<TestCase>>(`/test-cases/${id}`, {
+      title: data.title,
+      type: data.type,
+      requirementId: data.requirementId || undefined,
+      preconditions: data.preconditions || undefined,
+      expectedResult: data.expectedResult,
+      steps: formattedSteps,
+    });
+
+    if (res.success && res.data) {
+      setTestCase(res.data);
+      setIsEditing(false);
+    } else {
+      throw new Error(res.error || 'Failed to update test case');
+    }
+  };
+
   if (loading) return <div style={{ padding: '1.5rem' }}>Loading...</div>;
   if (error || !testCase)
     return <div style={{ padding: '1.5rem', color: 'red' }}>{error || 'Not found'}</div>;
@@ -42,92 +74,136 @@ export function TestCaseDetail() {
           <h2>{testCase.title}</h2>
           <span className={`badge badge-${testCase.type.toLowerCase()}`}>{testCase.type}</span>
         </div>
+        <div className="toolbar-right">
+          {canEdit && !isEditing && (
+            <button className="btn-primary" onClick={() => setIsEditing(true)}>
+              Edit
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ padding: '1.5rem', overflowY: 'auto' }}>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <h3
+        {globalError && (
+          <div
             style={{
-              fontSize: '0.85rem',
-              color: 'var(--color-text-muted)',
-              marginBottom: '0.25rem',
+              padding: '1rem',
+              color: 'red',
+              backgroundColor: '#fee2e2',
+              marginBottom: '1rem',
             }}
           >
-            LINKED REQUIREMENT
-          </h3>
-          <div>{testCase.requirement ? testCase.requirement.title : 'None'}</div>
-        </div>
-
-        {testCase.preconditions && (
-          <div style={{ marginBottom: '1.5rem' }}>
-            <h3
-              style={{
-                fontSize: '0.85rem',
-                color: 'var(--color-text-muted)',
-                marginBottom: '0.25rem',
-              }}
-            >
-              PRECONDITIONS
-            </h3>
-            <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem' }}>
-              {testCase.preconditions}
-            </div>
+            {globalError}
           </div>
         )}
 
-        <div style={{ marginBottom: '1.5rem' }}>
-          <h3
-            style={{
-              fontSize: '0.85rem',
-              color: 'var(--color-text-muted)',
-              marginBottom: '0.5rem',
+        {isEditing ? (
+          <TestCaseForm
+            initialData={{
+              title: testCase.title,
+              type: testCase.type,
+              requirementId: testCase.requirementId || '',
+              preconditions: testCase.preconditions || '',
+              expectedResult: testCase.expectedResult,
+              steps: testCase.steps.map((s) => ({ action: s.action, expected: s.expected || '' })),
             }}
-          >
-            STEPS
-          </h3>
-          <table className="data-table" style={{ border: '1px solid var(--color-border)' }}>
-            <thead>
-              <tr>
-                <th style={{ width: '50px' }}>#</th>
-                <th>Action</th>
-                <th>Expected Result (Optional)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {testCase.steps.map((step) => (
-                <tr key={step.order}>
-                  <td>{step.order}</td>
-                  <td>{step.action}</td>
-                  <td>{step.expected || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            onSubmit={async (data) => {
+              try {
+                await handleUpdate(data);
+              } catch (err: unknown) {
+                setGlobalError((err as Error).message);
+              }
+            }}
+            onCancel={() => setIsEditing(false)}
+            submitLabel="Save Changes"
+          />
+        ) : (
+          <>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h3
+                style={{
+                  fontSize: '0.85rem',
+                  color: 'var(--color-text-muted)',
+                  marginBottom: '0.25rem',
+                }}
+              >
+                LINKED REQUIREMENT
+              </h3>
+              <div>{testCase.requirement ? testCase.requirement.title : 'None'}</div>
+            </div>
 
-        <div>
-          <h3
-            style={{
-              fontSize: '0.85rem',
-              color: 'var(--color-text-muted)',
-              marginBottom: '0.25rem',
-            }}
-          >
-            EXPECTED RESULT
-          </h3>
-          <div
-            style={{
-              whiteSpace: 'pre-wrap',
-              fontSize: '0.9rem',
-              padding: '1rem',
-              backgroundColor: '#f8fafc',
-              border: '1px solid var(--color-border)',
-              borderRadius: '4px',
-            }}
-          >
-            {testCase.expectedResult}
-          </div>
-        </div>
+            {testCase.preconditions && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3
+                  style={{
+                    fontSize: '0.85rem',
+                    color: 'var(--color-text-muted)',
+                    marginBottom: '0.25rem',
+                  }}
+                >
+                  PRECONDITIONS
+                </h3>
+                <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem' }}>
+                  {testCase.preconditions}
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h3
+                style={{
+                  fontSize: '0.85rem',
+                  color: 'var(--color-text-muted)',
+                  marginBottom: '0.5rem',
+                }}
+              >
+                STEPS
+              </h3>
+              <table className="data-table" style={{ border: '1px solid var(--color-border)' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '50px' }}>#</th>
+                    <th>Action</th>
+                    <th>Expected Result (Optional)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {testCase.steps.map((step) => (
+                    <tr key={step.order}>
+                      <td>{step.order}</td>
+                      <td>{step.action}</td>
+                      <td>{step.expected || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div>
+              <h3
+                style={{
+                  fontSize: '0.85rem',
+                  color: 'var(--color-text-muted)',
+                  marginBottom: '0.25rem',
+                }}
+              >
+                EXPECTED RESULT
+              </h3>
+              <div
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  fontSize: '0.9rem',
+                  padding: '1rem',
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '4px',
+                }}
+              >
+                {testCase.expectedResult}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
