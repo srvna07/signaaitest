@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../lib/apiClient';
 import { ApiResponse, Role } from '../../types';
-import { FolderGit2, Plus, LogOut, ArrowRight, Edit } from 'lucide-react';
+import { FolderGit2, Plus, LogOut, ArrowRight, Edit, Trash2 } from 'lucide-react';
 import styles from '../../components/Layout/Layout.module.css';
 
 interface Project {
@@ -50,6 +50,7 @@ export function ProjectList() {
   const navigate = useNavigate();
 
   const canCreate = user?.role === Role.ADMIN || user?.role === Role.EDITOR;
+  const canDelete = user?.role === Role.ADMIN;
 
   useEffect(() => {
     fetchProjects();
@@ -122,6 +123,22 @@ export function ProjectList() {
       setError((err as Error).message || 'Failed to update project');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this project? This action cannot be undone and will fail if the project has existing data.')) return;
+    
+    try {
+      const res = await apiClient.delete<ApiResponse<unknown>>(`/projects/${id}`);
+      if (res.success) {
+        setProjects(projects.filter(p => p.id !== id));
+      } else {
+        setError(res.error || 'Failed to delete project');
+      }
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to delete project');
     }
   };
 
@@ -343,6 +360,27 @@ export function ProjectList() {
                               title="Edit Project"
                             >
                               <Edit size={16} />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              onClick={(e) => handleDelete(e, p.id)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: '4px',
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.1)'}
+                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              title="Delete Project"
+                            >
+                              <Trash2 size={16} />
                             </button>
                           )}
                           <div style={{ 
