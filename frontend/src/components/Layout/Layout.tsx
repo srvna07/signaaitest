@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { LayoutDashboard, FileCheck2, Server, LogOut, TestTube2 } from 'lucide-react';
+import { LayoutDashboard, FileCheck2, Server, LogOut, CheckSquare } from 'lucide-react';
 import styles from './Layout.module.css';
 
 export function Layout() {
@@ -16,7 +16,7 @@ export function Layout() {
     <div className={styles.layout}>
       <aside className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
-          <TestTube2 className={styles.logoIcon} />
+          <CheckSquare className={styles.logoIcon} />
           <span className={styles.logoText}>Signa AI Test</span>
         </div>
 

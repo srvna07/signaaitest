@@ -10,7 +10,9 @@ interface RequestOptions extends RequestInit {
 }
 
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  let { token, ...init } = options;
+  let token = options.token;
+  const init = { ...options };
+  delete init.token;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
