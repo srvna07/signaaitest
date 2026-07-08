@@ -10,8 +10,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Models ──────────────────────────────────────────────────────────────────
-// Add your models here. Example placeholder:
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum TestCaseType {
+  UI
+  API
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
 
 model User {
   id        String   @id @default(cuid())
@@ -21,5 +27,76 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Relations
+  environments Environment[]
+  requirements Requirement[]
+  testCases    TestCase[]
+  auditLogs    AuditLog[]
+
   @@map("users")
+}
+
+model Environment {
+  id        String   @id @default(uuid())
+  name      String
+  baseUrl   String
+  variables Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  // Relations
+  createdBy   String
+  creator     User   @relation(fields: [createdBy], references: [id])
+
+  @@map("environments")
+}
+
+model Requirement {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  createdAt   DateTime @default(now())
+
+  // Relations
+  createdBy String
+  creator   User       @relation(fields: [createdBy], references: [id])
+  testCases TestCase[]
+
+  @@map("requirements")
+}
+
+model TestCase {
+  id             String       @id @default(uuid())
+  title          String
+  type           TestCaseType
+  steps          Json         @default("[]")
+  preconditions  String?
+  expectedResult String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  requirementId String?
+  requirement   Requirement? @relation(fields: [requirementId], references: [id])
+  createdBy     String
+  creator       User         @relation(fields: [createdBy], references: [id])
+
+  @@index([requirementId])
+  @@index([type])
+  @@map("test_cases")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String
+  entityType String
+  entityId   String
+  timestamp  DateTime @default(now())
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType])
+  @@map("audit_logs")
 }
