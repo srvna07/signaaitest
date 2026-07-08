@@ -10,12 +10,16 @@ interface RequestOptions extends RequestInit {
 }
 
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  const { token, ...init } = options;
+  let { token, ...init } = options;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(init.headers as Record<string, string>),
   };
+
+  if (!token) {
+    token = localStorage.getItem('token') || undefined;
+  }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
