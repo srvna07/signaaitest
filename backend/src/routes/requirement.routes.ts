@@ -8,6 +8,7 @@ import {
   createRequirement,
   updateRequirement,
   deleteRequirement,
+  generateTestCases,
 } from '../controllers/requirement.controller';
 
 const router = Router();
@@ -16,6 +17,11 @@ router.use(authenticate);
 
 router.get('/', (req, res) => void listRequirements(req, res));
 router.get('/:id', (req, res) => void getRequirement(req, res));
+router.post(
+  '/:id/generate-test-cases',
+  authorize(Role.ADMIN, Role.EDITOR),
+  (req, res) => void generateTestCases(req, res),
+);
 router.post(
   '/',
   authorize(Role.ADMIN, Role.EDITOR),

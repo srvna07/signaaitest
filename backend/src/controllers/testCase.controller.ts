@@ -168,3 +168,41 @@ export async function deleteTestCase(req: Request, res: Response): Promise<void>
   await writeAuditLog(userId, 'delete', 'TestCase', req.params.id);
   res.json({ success: true, data: { id: req.params.id } });
 }
+
+/** POST /api/test-cases/bulk */
+export async function bulkCreateTestCases(req: Request, res: Response): Promise<void> {
+  const parsed = z.array(createSchema).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: parsed.error.errors[0]?.message });
+    return;
+  }
+
+  const userId = req.user!.userId;
+  const createdTestCases = [];
+
+  for (const item of parsed.data) {
+    const { requirementId, ...rest } = item;
+
+    if (requirementId) {
+      const req_exists = await prisma.requirement.findUnique({ where: { id: requirementId } });
+      if (!req_exists) {
+        res
+          .status(404)
+          .json({ success: false, error: `Linked requirement not found for ${item.title}` });
+        return;
+      }
+    }
+
+    const testCase = await prisma.testCase.create({
+      data: { ...rest, requirementId: requirementId ?? null, createdBy: userId },
+      include: includeDetail,
+    });
+
+    createdTestCases.push(testCase);
+  }
+
+  // Single bulk audit log
+  await writeAuditLog(userId, 'bulk_create', 'TestCase', 'bulk_operation');
+
+  res.status(201).json({ success: true, data: createdTestCases });
+}

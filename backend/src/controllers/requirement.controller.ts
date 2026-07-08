@@ -113,3 +113,32 @@ export async function deleteRequirement(req: Request, res: Response): Promise<vo
   await writeAuditLog(userId, 'delete', 'Requirement', req.params.id);
   res.json({ success: true, data: { id: req.params.id } });
 }
+
+/** POST /api/requirements/:id/generate-test-cases */
+export async function generateTestCases(req: Request, res: Response): Promise<void> {
+  const requirementId = req.params.id;
+  const existing = await prisma.requirement.findUnique({ where: { id: requirementId } });
+
+  if (!existing) {
+    res.status(404).json({ success: false, error: 'Requirement not found' });
+    return;
+  }
+
+  const userId = req.user!.userId;
+  await writeAuditLog(userId, 'generate_test_cases', 'Requirement', requirementId);
+
+  // Requirement payload for AI
+  const requirementText = `Title: ${existing.title}\nDescription: ${existing.description}`;
+
+  try {
+    const aiProvider = (await import('../ai/AIProviderFactory')).AIProviderFactory.getProvider();
+    const suggestions = await aiProvider.generateTestCases(requirementText);
+
+    res.json({ success: true, data: suggestions });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    // Only log that generation failed, not the full request/response to prevent leaks
+    console.error(`AI generation failed for requirement ${requirementId}: ${msg}`); // eslint-disable-line no-console
+    res.status(500).json({ success: false, error: msg || 'AI Generation failed' });
+  }
+}
