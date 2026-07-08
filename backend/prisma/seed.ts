@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -7,11 +7,12 @@ async function main(): Promise<void> {
   // ── Admin user ──────────────────────────────────────────────────────────────
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@signa-ai.test' },
-    update: {},
+    update: { role: Role.ADMIN },
     create: {
       email: 'admin@signa-ai.test',
       password: await bcrypt.hash('Admin@1234', 12),
       name: 'Admin',
+      role: Role.ADMIN,
     },
   });
 

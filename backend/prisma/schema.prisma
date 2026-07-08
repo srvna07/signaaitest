@@ -12,6 +12,13 @@ datasource db {
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
+enum Role {
+  ADMIN
+  EDITOR
+  RUNNER
+  VIEWER
+}
+
 enum TestCaseType {
   UI
   API
@@ -24,6 +31,7 @@ model User {
   email     String   @unique
   password  String
   name      String?
+  role      Role     @default(VIEWER)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
