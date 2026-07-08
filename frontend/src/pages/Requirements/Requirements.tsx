@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCcw } from 'lucide-react';
+import { RefreshCcw, Edit, Trash2 } from 'lucide-react';
 import { apiClient } from '../../lib/apiClient';
 import { ApiResponse, Requirement } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
 
 export function Requirements() {
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
+  const canDelete = user?.role === 'ADMIN';
 
   const fetchReqs = async () => {
     setLoading(true);
@@ -30,6 +35,26 @@ export function Requirements() {
   useEffect(() => {
     fetchReqs();
   }, []);
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this requirement?')) return;
+    try {
+      const res = await apiClient.delete<ApiResponse<unknown>>(`/requirements/${id}`);
+      if (res.success) {
+        fetchReqs();
+      } else {
+        setError(res.error || 'Failed to delete requirement');
+      }
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Error deleting requirement');
+    }
+  };
+
+  const handleEdit = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    navigate(`/requirements/${id}?edit=true`);
+  };
 
   return (
     <div className="page-container">
@@ -56,16 +81,17 @@ export function Requirements() {
               <th>Description</th>
               <th>Coverage</th>
               <th>Created</th>
+              <th style={{ width: '80px', textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5}>Loading...</td>
+                <td colSpan={6}>Loading...</td>
               </tr>
             ) : requirements.length === 0 ? (
               <tr>
-                <td colSpan={5}>No requirements found.</td>
+                <td colSpan={6}>No requirements found.</td>
               </tr>
             ) : (
               requirements.map((req) => (
@@ -92,6 +118,38 @@ export function Requirements() {
                     </span>
                   </td>
                   <td>{new Date(req.createdAt).toLocaleDateString()}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      {canEdit && (
+                        <button
+                          onClick={(e) => handleEdit(e, req.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'var(--color-text-muted)',
+                          }}
+                          title="Edit"
+                        >
+                          <Edit size={16} />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          onClick={(e) => handleDelete(e, req.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#dc2626',
+                          }}
+                          title="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))
             )}

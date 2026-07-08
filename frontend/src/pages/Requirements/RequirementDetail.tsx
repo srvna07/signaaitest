@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ChevronLeft, Wand2 } from 'lucide-react';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ChevronLeft, Wand2, Trash2 } from 'lucide-react';
 import { apiClient } from '../../lib/apiClient';
 import { ApiResponse, Requirement } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
@@ -22,9 +22,29 @@ interface GeneratedTestCase {
 
 export function RequirementDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [requirement, setRequirement] = useState<Requirement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const { user } = useAuth();
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
+  const canGenerate = user?.role === 'ADMIN' || user?.role === 'EDITOR';
+  const canDelete = user?.role === 'ADMIN';
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('edit') === 'true' && canEdit && requirement) {
+      setIsEditing(true);
+      setEditTitle(requirement.title);
+      setEditDesc(requirement.description);
+    }
+  }, [searchParams, canEdit, requirement]);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
@@ -32,9 +52,6 @@ export function RequirementDetail() {
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-
-  const { user } = useAuth();
-  const canGenerate = user?.role === 'ADMIN' || user?.role === 'EDITOR';
 
   useEffect(() => {
     const fetchRequirement = async () => {
@@ -52,7 +69,62 @@ export function RequirementDetail() {
       }
     };
     fetchRequirement();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const startEdit = () => {
+    if (!requirement) return;
+    setEditTitle(requirement.title);
+    setEditDesc(requirement.description);
+    setIsEditing(true);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTitle.trim() || !editDesc.trim()) return;
+    setIsUpdating(true);
+    setError('');
+    try {
+      const res = await apiClient.put<ApiResponse<Requirement>>(`/requirements/${id}`, {
+        title: editTitle.trim(),
+        description: editDesc.trim(),
+      });
+      if (res.success && res.data) {
+        setRequirement(res.data);
+        setIsEditing(false);
+        if (searchParams.has('edit')) {
+          const newParams = new URLSearchParams(searchParams);
+          newParams.delete('edit');
+          setSearchParams(newParams, { replace: true });
+        }
+      } else {
+        setError(res.error || 'Failed to update requirement');
+      }
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Error updating requirement');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (
+      !window.confirm(
+        'Are you sure you want to delete this requirement? This action cannot be undone.',
+      )
+    )
+      return;
+    try {
+      const res = await apiClient.delete<ApiResponse<unknown>>(`/requirements/${id}`);
+      if (res.success) {
+        navigate('/requirements');
+      } else {
+        setError(res.error || 'Failed to delete requirement');
+      }
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Error deleting requirement');
+    }
+  };
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -135,7 +207,12 @@ export function RequirementDetail() {
           </span>
         </div>
         <div className="toolbar-right">
-          {canGenerate && (
+          {canEdit && !isEditing && (
+            <button className="btn-primary" onClick={startEdit}>
+              Edit
+            </button>
+          )}
+          {canGenerate && !isEditing && (
             <button
               className="btn-primary"
               onClick={handleGenerate}
@@ -146,24 +223,110 @@ export function RequirementDetail() {
               {isGenerating ? 'Generating...' : 'Generate test cases with AI'}
             </button>
           )}
+          {canDelete && !isEditing && (
+            <button
+              className="btn-secondary"
+              onClick={handleDelete}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                color: '#dc2626',
+                borderColor: '#fca5a5',
+              }}
+              title="Delete Requirement"
+            >
+              <Trash2 size={16} />
+              Delete
+            </button>
+          )}
         </div>
       </div>
 
       <div style={{ padding: '1.5rem', overflowY: 'auto' }}>
-        <div style={{ marginBottom: '2rem' }}>
-          <h3
+        {isEditing ? (
+          <form
+            onSubmit={handleUpdate}
             style={{
-              fontSize: '0.85rem',
-              color: 'var(--color-text-muted)',
-              marginBottom: '0.25rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+              maxWidth: '800px',
+              marginBottom: '2rem',
             }}
           >
-            DESCRIPTION
-          </h3>
-          <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem' }}>
-            {requirement.description || 'No description provided.'}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>Title *</label>
+              <input
+                type="text"
+                required
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                style={{
+                  padding: '0.5rem',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '4px',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>Description *</label>
+              <textarea
+                required
+                rows={5}
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                style={{
+                  padding: '0.5rem',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '4px',
+                  fontFamily: 'inherit',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+              <button type="submit" className="btn-primary" disabled={isUpdating}>
+                {isUpdating ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditing(false);
+                  if (searchParams.has('edit')) {
+                    const newParams = new URLSearchParams(searchParams);
+                    newParams.delete('edit');
+                    setSearchParams(newParams, { replace: true });
+                  }
+                }}
+                disabled={isUpdating}
+                style={{
+                  padding: '0.4rem 0.75rem',
+                  backgroundColor: 'white',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div style={{ marginBottom: '2rem' }}>
+            <h3
+              style={{
+                fontSize: '0.85rem',
+                color: 'var(--color-text-muted)',
+                marginBottom: '0.25rem',
+              }}
+            >
+              DESCRIPTION
+            </h3>
+            <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem' }}>
+              {requirement.description || 'No description provided.'}
+            </div>
           </div>
-        </div>
+        )}
 
         {generateError && (
           <div

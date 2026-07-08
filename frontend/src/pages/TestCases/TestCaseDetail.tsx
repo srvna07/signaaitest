@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ChevronLeft } from 'lucide-react';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ChevronLeft, Trash2 } from 'lucide-react';
 import { apiClient } from '../../lib/apiClient';
 import { ApiResponse, TestCase } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
@@ -8,14 +8,24 @@ import { TestCaseForm, TestCaseFormData } from '../../components/TestCaseForm';
 
 export function TestCaseDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [testCase, setTestCase] = useState<TestCase | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const { user } = useAuth();
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
+  const canDelete = user?.role === 'ADMIN';
+
   const [isEditing, setIsEditing] = useState(false);
   const [globalError, setGlobalError] = useState('');
-  const { user } = useAuth();
 
-  const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
+  useEffect(() => {
+    if (searchParams.get('edit') === 'true' && canEdit) {
+      setIsEditing(true);
+    }
+  }, [searchParams, canEdit]);
 
   useEffect(() => {
     const fetchTestCase = async () => {
@@ -34,6 +44,25 @@ export function TestCaseDetail() {
     };
     fetchTestCase();
   }, [id]);
+
+  const handleDelete = async () => {
+    if (
+      !window.confirm(
+        'Are you sure you want to delete this test case? This action cannot be undone.',
+      )
+    )
+      return;
+    try {
+      const res = await apiClient.delete<ApiResponse<unknown>>(`/test-cases/${id}`);
+      if (res.success) {
+        navigate('/test-cases');
+      } else {
+        setGlobalError(res.error || 'Failed to delete test case');
+      }
+    } catch (err: unknown) {
+      setGlobalError((err as Error).message || 'Error deleting test case');
+    }
+  };
 
   const handleUpdate = async (data: TestCaseFormData) => {
     setGlobalError('');
@@ -55,6 +84,11 @@ export function TestCaseDetail() {
     if (res.success && res.data) {
       setTestCase(res.data);
       setIsEditing(false);
+      if (searchParams.has('edit')) {
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('edit');
+        setSearchParams(newParams, { replace: true });
+      }
     } else {
       throw new Error(res.error || 'Failed to update test case');
     }
@@ -78,6 +112,23 @@ export function TestCaseDetail() {
           {canEdit && !isEditing && (
             <button className="btn-primary" onClick={() => setIsEditing(true)}>
               Edit
+            </button>
+          )}
+          {canDelete && !isEditing && (
+            <button
+              className="btn-secondary"
+              onClick={handleDelete}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                color: '#dc2626',
+                borderColor: '#fca5a5',
+              }}
+              title="Delete Test Case"
+            >
+              <Trash2 size={16} />
+              Delete
             </button>
           )}
         </div>
@@ -114,7 +165,14 @@ export function TestCaseDetail() {
                 setGlobalError((err as Error).message);
               }
             }}
-            onCancel={() => setIsEditing(false)}
+            onCancel={() => {
+              setIsEditing(false);
+              if (searchParams.has('edit')) {
+                const newParams = new URLSearchParams(searchParams);
+                newParams.delete('edit');
+                setSearchParams(newParams, { replace: true });
+              }
+            }}
             submitLabel="Save Changes"
           />
         ) : (

@@ -9,6 +9,7 @@ import { TestCaseNew } from './pages/TestCases/TestCaseNew';
 import { Requirements } from './pages/Requirements/Requirements';
 import { RequirementDetail } from './pages/Requirements/RequirementDetail';
 import { Environments } from './pages/Environments/Environments';
+import { EnvironmentDetail } from './pages/Environments/EnvironmentDetail';
 import { Role } from './types';
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
               <Route path="/requirements" element={<Requirements />} />
               <Route path="/requirements/:id" element={<RequirementDetail />} />
               <Route path="/environments" element={<Environments />} />
+              <Route path="/environments/:id" element={<EnvironmentDetail />} />
             </Route>
           </Route>
         </Routes>

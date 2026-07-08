@@ -1,12 +1,19 @@
 import { useEffect, useState } from 'react';
-import { RefreshCcw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { RefreshCcw, Edit, Trash2 } from 'lucide-react';
 import { apiClient } from '../../lib/apiClient';
 import { ApiResponse, Environment } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
 
 export function Environments() {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
+  const canDelete = user?.role === 'ADMIN';
 
   const fetchEnvs = async () => {
     setLoading(true);
@@ -29,6 +36,26 @@ export function Environments() {
     fetchEnvs();
   }, []);
 
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this environment?')) return;
+    try {
+      const res = await apiClient.delete<ApiResponse<unknown>>(`/environments/${id}`);
+      if (res.success) {
+        fetchEnvs();
+      } else {
+        setError(res.error || 'Failed to delete environment');
+      }
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Error deleting environment');
+    }
+  };
+
+  const handleEdit = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    navigate(`/environments/${id}?edit=true`);
+  };
+
   return (
     <div className="page-container">
       <div className="toolbar">
@@ -50,20 +77,26 @@ export function Environments() {
               <th>Name</th>
               <th>Base URL</th>
               <th>Created</th>
+              <th style={{ width: '80px', textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={4}>Loading...</td>
+                <td colSpan={5}>Loading...</td>
               </tr>
             ) : environments.length === 0 ? (
               <tr>
-                <td colSpan={4}>No environments found.</td>
+                <td colSpan={5}>No environments found.</td>
               </tr>
             ) : (
               environments.map((env) => (
-                <tr key={env.id}>
+                <tr
+                  key={env.id}
+                  onClick={() => navigate(`/environments/${env.id}`)}
+                  style={{ cursor: 'pointer' }}
+                  className="hover-row"
+                >
                   <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                     {env.id.split('-')[0]}
                   </td>
@@ -72,6 +105,38 @@ export function Environments() {
                     {env.baseUrl}
                   </td>
                   <td>{new Date(env.createdAt).toLocaleDateString()}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      {canEdit && (
+                        <button
+                          onClick={(e) => handleEdit(e, env.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'var(--color-text-muted)',
+                          }}
+                          title="Edit"
+                        >
+                          <Edit size={16} />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          onClick={(e) => handleDelete(e, env.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#dc2626',
+                          }}
+                          title="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))
             )}
