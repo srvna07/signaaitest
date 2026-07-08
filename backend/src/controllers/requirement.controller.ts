@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma';
+import { GeminiProvider } from '../ai/providers/GeminiProvider';
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 
@@ -137,8 +138,111 @@ export async function generateTestCases(req: Request, res: Response): Promise<vo
     res.json({ success: true, data: suggestions });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    // Only log that generation failed, not the full request/response to prevent leaks
-    console.error(`AI generation failed for requirement ${requirementId}: ${msg}`); // eslint-disable-line no-console
+    console.error(`AI generation failed for requirement ${requirementId}: ${msg}`);
     res.status(500).json({ success: false, error: msg || 'AI Generation failed' });
+  }
+}
+
+/** POST /api/requirements/:id/generate-from-browser */
+export async function generateFromBrowser(req: Request, res: Response): Promise<void> {
+  const requirementId = req.params.id;
+
+  const parsed = z
+    .object({
+      environmentId: z.string().uuid(),
+      path: z.string().optional().default(''),
+      scope: z.enum(['UI', 'API', 'BOTH']).default('BOTH'),
+    })
+    .safeParse(req.body);
+
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: parsed.error.errors[0]?.message });
+    return;
+  }
+
+  const { environmentId, path, scope } = parsed.data;
+
+  const [existingReq, env] = await Promise.all([
+    prisma.requirement.findUnique({ where: { id: requirementId } }),
+    prisma.environment.findUnique({ where: { id: environmentId } }),
+  ]);
+
+  if (!existingReq) {
+    res.status(404).json({ success: false, error: 'Requirement not found' });
+    return;
+  }
+  if (!env) {
+    res.status(404).json({ success: false, error: 'Environment not found' });
+    return;
+  }
+
+  const fullUrl = new URL(path, env.baseUrl).toString();
+  const userId = req.user!.userId;
+  await writeAuditLog(
+    userId,
+    'generate_from_browser',
+    'Requirement',
+    requirementId + ':' + fullUrl,
+  );
+
+  const requirementText = `Title: ${existingReq.title}\nDescription: ${existingReq.description}`;
+
+  try {
+    const { chromium } = await import('playwright');
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+
+    // Set a timeout for navigation
+    await page.goto(fullUrl, { waitUntil: 'networkidle', timeout: 30000 });
+
+    const screenshotBuffer = await page.screenshot({ type: 'png' });
+    const screenshotBase64 = screenshotBuffer.toString('base64');
+
+    // Extract basic interactive elements
+    const domTree = await page.evaluate(() => {
+      const elements = Array.from(document.querySelectorAll('button, a, input, select, textarea'));
+      return elements
+        .map((element) => {
+          const el = element as HTMLElement;
+          const tag = el.tagName.toLowerCase();
+          const text =
+            el.textContent?.trim().replace(/\s+/g, ' ') ||
+            (el as HTMLInputElement).value ||
+            (el as HTMLInputElement).placeholder ||
+            '';
+          const id = el.id ? `#${el.id}` : '';
+          const type = (el as HTMLInputElement).type
+            ? `[type="${(el as HTMLInputElement).type}"]`
+            : '';
+          const name = (el as HTMLInputElement).name
+            ? `[name="${(el as HTMLInputElement).name}"]`
+            : '';
+          return `${tag}${id}${type}${name} -> "${text}"`;
+        })
+        .filter((str) => !str.endsWith('-> ""'))
+        .join('\n');
+    });
+
+    await browser.close();
+
+    // Force Gemini for vision
+    const gemini = new GeminiProvider();
+
+    const suggestions = await gemini.generateTestCasesFromBrowser(
+      requirementText,
+      screenshotBase64,
+      domTree,
+      scope,
+    );
+
+    res.json({
+      success: true,
+      data: suggestions,
+      screenshot: `data:image/png;base64,${screenshotBase64}`,
+    });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`Browser generation failed for requirement ${requirementId}: ${msg}`);
+    res.status(500).json({ success: false, error: msg || 'Browser Generation failed' });
   }
 }

@@ -9,6 +9,7 @@ import {
   updateRequirement,
   deleteRequirement,
   generateTestCases,
+  generateFromBrowser,
 } from '../controllers/requirement.controller';
 
 const router = Router();
@@ -21,6 +22,11 @@ router.post(
   '/:id/generate-test-cases',
   authorize(Role.ADMIN, Role.EDITOR),
   (req, res) => void generateTestCases(req, res),
+);
+router.post(
+  '/:id/generate-from-browser',
+  authorize(Role.ADMIN, Role.EDITOR),
+  (req, res) => void generateFromBrowser(req, res),
 );
 router.post(
   '/',

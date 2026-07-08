@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Wand2, Trash2 } from 'lucide-react';
+import { ChevronLeft, Wand2, Trash2, Globe } from 'lucide-react';
 import { apiClient } from '../../lib/apiClient';
-import { ApiResponse, Requirement } from '../../types';
+import { ApiResponse, Requirement, Environment } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 
-// We need a local interface for the generated test case payload
 interface GeneratedTestCaseStep {
   order: number;
   action: string;
@@ -25,6 +24,7 @@ export function RequirementDetail() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [requirement, setRequirement] = useState<Requirement | null>(null);
+  const [environments, setEnvironments] = useState<Environment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -49,26 +49,45 @@ export function RequirementDetail() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
   const [generatedCases, setGeneratedCases] = useState<GeneratedTestCase[]>([]);
+  const [generatedScreenshot, setGeneratedScreenshot] = useState<string>('');
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // New Generation Options State
+  const [showGenerationOptions, setShowGenerationOptions] = useState(false);
+  const [generationScope, setGenerationScope] = useState<'UI' | 'API' | 'BOTH'>('BOTH');
+  const [generationMode, setGenerationMode] = useState<'text' | 'browser' | null>(null);
+  const [selectedEnvId, setSelectedEnvId] = useState('');
+  const [explorePath, setExplorePath] = useState('');
+
   useEffect(() => {
-    const fetchRequirement = async () => {
+    const fetchData = async () => {
       try {
-        const res = await apiClient.get<ApiResponse<Requirement>>(`/requirements/${id}`);
-        if (res.success && res.data) {
-          setRequirement(res.data);
+        const [reqRes, envRes] = await Promise.all([
+          apiClient.get<ApiResponse<Requirement>>(`/requirements/${id}`),
+          apiClient.get<ApiResponse<Environment[]>>('/environments'),
+        ]);
+
+        if (reqRes.success && reqRes.data) {
+          setRequirement(reqRes.data);
         } else {
-          setError(res.error || 'Failed to fetch requirement');
+          setError(reqRes.error || 'Failed to fetch requirement');
+        }
+
+        if (envRes.success && envRes.data) {
+          setEnvironments(envRes.data);
+          if (envRes.data.length > 0) {
+            setSelectedEnvId(envRes.data[0].id);
+          }
         }
       } catch (err: unknown) {
-        setError((err as Error).message || 'Error fetching requirement');
+        setError((err as Error).message || 'Error fetching data');
       } finally {
         setLoading(false);
       }
     };
-    fetchRequirement();
+    fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -126,22 +145,51 @@ export function RequirementDetail() {
     }
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (mode: 'text' | 'browser') => {
     setIsGenerating(true);
     setGenerateError('');
     setSaveSuccess(false);
     setGeneratedCases([]);
+    setGeneratedScreenshot('');
+    setShowGenerationOptions(false);
+
     try {
-      const res = await apiClient.post<ApiResponse<GeneratedTestCase[]>>(
-        `/requirements/${id}/generate-test-cases`,
-        {},
-      );
-      if (res.success && res.data) {
-        setGeneratedCases(res.data);
-        // Select all by default
-        setSelectedIndices(new Set(res.data.map((_, i) => i)));
+      if (mode === 'text') {
+        const res = await apiClient.post<ApiResponse<GeneratedTestCase[]>>(
+          `/requirements/${id}/generate-test-cases`,
+          {},
+        );
+        if (res.success && res.data) {
+          // Filter locally based on scope if needed, or pass scope to backend.
+          // For simplicity we just use what's returned.
+          const filteredData = res.data.filter(
+            (tc) => generationScope === 'BOTH' || tc.type === generationScope,
+          );
+          setGeneratedCases(filteredData);
+          setSelectedIndices(new Set(filteredData.map((_, i) => i)));
+        } else {
+          setGenerateError(res.error || 'AI generation failed');
+        }
       } else {
-        setGenerateError(res.error || 'AI generation failed');
+        if (!selectedEnvId) {
+          throw new Error('Please select an environment');
+        }
+        const res = await apiClient.post<
+          ApiResponse<GeneratedTestCase[]> & { screenshot?: string }
+        >(`/requirements/${id}/generate-from-browser`, {
+          environmentId: selectedEnvId,
+          path: explorePath,
+          scope: generationScope,
+        });
+        if (res.success && res.data) {
+          setGeneratedCases(res.data);
+          if (res.screenshot) {
+            setGeneratedScreenshot(res.screenshot);
+          }
+          setSelectedIndices(new Set(res.data.map((_, i) => i)));
+        } else {
+          setGenerateError(res.error || 'Browser AI generation failed');
+        }
       }
     } catch (err: unknown) {
       setGenerateError((err as Error).message || 'AI generation failed (Timeout or server error)');
@@ -167,6 +215,7 @@ export function RequirementDetail() {
       if (res.success) {
         setSaveSuccess(true);
         setGeneratedCases([]);
+        setGeneratedScreenshot('');
         if (requirement) {
           setRequirement({
             ...requirement,
@@ -215,12 +264,12 @@ export function RequirementDetail() {
           {canGenerate && !isEditing && (
             <button
               className="btn-primary"
-              onClick={handleGenerate}
+              onClick={() => setShowGenerationOptions(!showGenerationOptions)}
               disabled={isGenerating || isSaving}
               style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
             >
               <Wand2 size={16} />
-              {isGenerating ? 'Generating...' : 'Generate test cases with AI'}
+              {isGenerating ? 'Generating...' : 'AI Generate Options'}
             </button>
           )}
           {canDelete && !isEditing && (
@@ -242,6 +291,162 @@ export function RequirementDetail() {
           )}
         </div>
       </div>
+
+      {showGenerationOptions && (
+        <div
+          style={{
+            backgroundColor: '#f8fafc',
+            padding: '1.5rem',
+            borderBottom: '1px solid var(--color-border)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '2rem', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '300px' }}>
+              <h4 style={{ margin: '0 0 1rem 0' }}>AI Test Case Generation Mode</h4>
+              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+                <button
+                  className={generationMode === 'text' ? 'btn-primary' : 'btn-secondary'}
+                  onClick={() => setGenerationMode('text')}
+                >
+                  <Wand2 size={16} style={{ marginRight: '0.5rem', display: 'inline' }} />
+                  Generate from requirement text
+                </button>
+                <button
+                  className={generationMode === 'browser' ? 'btn-primary' : 'btn-secondary'}
+                  onClick={() => setGenerationMode('browser')}
+                >
+                  <Globe size={16} style={{ marginRight: '0.5rem', display: 'inline' }} />
+                  Generate by exploring a live URL
+                </button>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontWeight: 500,
+                    marginBottom: '0.5rem',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  Target Scope:
+                </label>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.3rem',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      checked={generationScope === 'UI'}
+                      onChange={() => setGenerationScope('UI')}
+                    />{' '}
+                    UI Only
+                  </label>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.3rem',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      checked={generationScope === 'API'}
+                      onChange={() => setGenerationScope('API')}
+                    />{' '}
+                    API Only
+                  </label>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.3rem',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      checked={generationScope === 'BOTH'}
+                      onChange={() => setGenerationScope('BOTH')}
+                    />{' '}
+                    Both UI & API
+                  </label>
+                </div>
+              </div>
+
+              {generationMode === 'text' && (
+                <button className="btn-primary" onClick={() => handleGenerate('text')}>
+                  Start Generation
+                </button>
+              )}
+
+              {generationMode === 'browser' && (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '1rem',
+                    padding: '1rem',
+                    backgroundColor: 'white',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: '8px',
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                      Select Environment *
+                    </label>
+                    <select
+                      value={selectedEnvId}
+                      onChange={(e) => setSelectedEnvId(e.target.value)}
+                      style={{
+                        padding: '0.5rem',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      {environments.map((env) => (
+                        <option key={env.id} value={env.id}>
+                          {env.name} ({env.baseUrl})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                      Optional Path/Route
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. /login"
+                      value={explorePath}
+                      onChange={(e) => setExplorePath(e.target.value)}
+                      style={{
+                        padding: '0.5rem',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '4px',
+                      }}
+                    />
+                  </div>
+                  <button
+                    className="btn-primary"
+                    onClick={() => handleGenerate('browser')}
+                    style={{ alignSelf: 'flex-start' }}
+                  >
+                    Start exploration
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ padding: '1.5rem', overflowY: 'auto' }}>
         {isEditing ? (
@@ -328,6 +533,25 @@ export function RequirementDetail() {
           </div>
         )}
 
+        {isGenerating && (
+          <div
+            style={{
+              padding: '2rem',
+              textAlign: 'center',
+              backgroundColor: '#f1f5f9',
+              borderRadius: '8px',
+              marginBottom: '2rem',
+            }}
+          >
+            <div style={{ fontSize: '1.2rem', fontWeight: 500, marginBottom: '0.5rem' }}>
+              {generationMode === 'browser'
+                ? 'Navigating to live URL and analyzing...'
+                : 'Generating test cases...'}
+            </div>
+            <div style={{ color: 'var(--color-text-muted)' }}>This may take up to 45 seconds.</div>
+          </div>
+        )}
+
         {generateError && (
           <div
             style={{
@@ -342,14 +566,6 @@ export function RequirementDetail() {
             }}
           >
             <span>{generateError}</span>
-            {canGenerate && (
-              <button
-                onClick={handleGenerate}
-                style={{ padding: '0.25rem 0.5rem', cursor: 'pointer' }}
-              >
-                Retry
-              </button>
-            )}
           </div>
         )}
 
@@ -364,6 +580,27 @@ export function RequirementDetail() {
             }}
           >
             Test cases saved successfully!
+          </div>
+        )}
+
+        {generatedScreenshot && (
+          <div style={{ marginBottom: '2rem' }}>
+            <h3>Browser Capture</h3>
+            <div
+              style={{
+                border: '1px solid var(--color-border)',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                padding: '0.5rem',
+                backgroundColor: '#e2e8f0',
+              }}
+            >
+              <img
+                src={generatedScreenshot}
+                alt="Live browser capture"
+                style={{ width: '100%', display: 'block', borderRadius: '4px' }}
+              />
+            </div>
           </div>
         )}
 
