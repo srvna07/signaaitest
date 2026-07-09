@@ -57,6 +57,7 @@ export function RequirementDetail() {
   // Live browser stream state
   const [liveFrame, setLiveFrame] = useState<string>('');
   const [liveStatus, setLiveStatus] = useState<string>('');
+  const [liveUrl, setLiveUrl] = useState<string>('');
 
   // Generation Options State
   const [showGenerationOptions, setShowGenerationOptions] = useState(false);
@@ -165,6 +166,7 @@ export function RequirementDetail() {
     setGeneratedScreenshot('');
     setLiveFrame('');
     setLiveStatus('');
+    setLiveUrl('');
     setShowGenerationOptions(false);
 
     try {
@@ -211,9 +213,11 @@ export function RequirementDetail() {
             data?: GeneratedTestCase[];
             screenshot?: string;
             message?: string;
+            url?: string;
           };
           if (msg.type === 'frame' && msg.frame) {
             setLiveFrame(`data:image/jpeg;base64,${msg.frame}`);
+            if (msg.url) setLiveUrl(msg.url);
           } else if (msg.type === 'status') {
             setLiveStatus(msg.message ?? '');
           } else if (msg.type === 'result') {
@@ -626,6 +630,11 @@ export function RequirementDetail() {
               />
               <span>Live Browser — {liveStatus || 'Connecting...'}</span>
             </div>
+            {liveUrl && (
+              <div style={{ padding: '0.25rem 1rem', backgroundColor: '#334155', color: '#cbd5e1', fontSize: '0.75rem', fontFamily: 'monospace', borderBottom: '1px solid #0f172a' }}>
+                {liveUrl}
+              </div>
+            )}
             {liveFrame ? (
               <img
                 src={liveFrame}

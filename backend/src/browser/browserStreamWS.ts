@@ -126,7 +126,9 @@ async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): 
 
   // Pipe all frames to the WebSocket client
   stream.on('frame', (frameBase64: string) => {
-    send(ws, { type: 'frame', frame: frameBase64 });
+    let currentUrl = '';
+    try { currentUrl = stream.page.url(); } catch {}
+    send(ws, { type: 'frame', frame: frameBase64, url: currentUrl });
   });
 
   ws.on('close', () => {
