@@ -22,7 +22,9 @@ export function Environments() {
     setLoading(true);
     setError('');
     try {
-      const res = await apiClient.get<ApiResponse<Environment[]>>(`/environments?projectId=${projectId}`);
+      const res = await apiClient.get<ApiResponse<Environment[]>>(
+        `/environments?projectId=${projectId}`,
+      );
       if (res.success && res.data) {
         setEnvironments(res.data);
       } else {

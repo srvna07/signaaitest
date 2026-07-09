@@ -25,7 +25,7 @@ export default function App() {
             <Route path="/" element={<ProjectList />} />
             <Route path="/projects/:projectId" element={<Layout />}>
               <Route index element={<Navigate to="test-cases" replace />} />
-              
+
               <Route path="test-cases" element={<TestCases />} />
               <Route element={<ProtectedRoute allowedRoles={[Role.ADMIN, Role.EDITOR]} />}>
                 <Route path="test-cases/new" element={<TestCaseNew />} />
@@ -37,7 +37,7 @@ export default function App() {
                 <Route path="requirements/new" element={<RequirementNew />} />
               </Route>
               <Route path="requirements/:id" element={<RequirementDetail />} />
-              
+
               <Route path="environments" element={<Environments />} />
               <Route path="environments/:id" element={<EnvironmentDetail />} />
             </Route>

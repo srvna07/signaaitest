@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { TestCaseType } from '@prisma/client';
 import { prisma } from '../config/prisma';
+import { ActionScriptGenerator } from '../ai/ActionScriptGenerator';
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 
@@ -233,4 +234,201 @@ export async function bulkDeleteTestCases(req: Request, res: Response): Promise<
 
   await writeAuditLog(userId, 'bulk_delete', 'TestCase', 'bulk_operation');
   res.json({ success: true, data: { count: result.count } });
+}
+
+// ─── Action-Script Generation & Save ─────────────────────────────────────────
+
+export const actionScriptSchema = z.object({
+  format: z.string().min(1, 'Format is required'),
+  content: z.string().min(1, 'Content is required'),
+});
+
+function checkNoHardcodedSecrets(
+  script: string,
+  testCaseText?: string,
+): { safe: boolean; error?: string } {
+  // 1. Variable assignments to sensitive variable names
+  const varRegex = /(password|pwd|secret|token|key|credential|auth|pass)\s*=\s*['"]([^'"]+)['"]/i;
+  const varMatch = script.match(varRegex);
+  if (varMatch) {
+    const val = varMatch[2];
+    if (
+      !val.startsWith('os.environ') &&
+      !val.startsWith('os.getenv') &&
+      !val.startsWith('env') &&
+      val.trim().length > 0
+    ) {
+      return {
+        safe: false,
+        error: `Hardcoded secret detected in variable '${varMatch[1]}' assignment.`,
+      };
+    }
+  }
+
+  // 2. Direct password/secret string literals in fill()
+  const fillRegex = /\.fill\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\)/gi;
+  let fillMatch;
+  while ((fillMatch = fillRegex.exec(script)) !== null) {
+    const selector = fillMatch[1];
+    if (/(password|pwd|secret|token|key|credential)/i.test(selector)) {
+      return {
+        safe: false,
+        error: `Hardcoded secret value detected in .fill() call for selector: ${selector}`,
+      };
+    }
+  }
+
+  // 3. API Headers mapping authorization/keys to literals
+  const headerRegex =
+    /['"](Authorization|X-API-Key|ApiKey|X-Auth-Token|Token)['"]\s*:\s*['"]([^'"]+)['"]/gi;
+  let headerMatch;
+  while ((headerMatch = headerRegex.exec(script)) !== null) {
+    const value = headerMatch[2];
+    if (
+      !value.includes('os.environ') &&
+      !value.includes('{os.') &&
+      !value.startsWith('Bearer {') &&
+      value.trim().length > 0
+    ) {
+      return {
+        safe: false,
+        error: `Hardcoded API token or credential detected in headers: "${headerMatch[1]}".`,
+      };
+    }
+  }
+
+  // 4. Look for specific hardcoded strings that were mentioned in the test case description
+  if (testCaseText) {
+    const stringLiteralRegex = /['"]([^'"]+)['"]/g;
+    let strMatch;
+    while ((strMatch = stringLiteralRegex.exec(script)) !== null) {
+      const literal = strMatch[1];
+      if (literal.length >= 6 && testCaseText.includes(literal)) {
+        const contextRegex = new RegExp(
+          `(password|secret|pwd|token|key|pass|credentials?)\\s+(is|to|with|of|equals?)?\\s*['"]?${literal.replace(/[-\\^$*+?.()|[\]{}]/g, '\\$&')}`,
+          'i',
+        );
+        if (contextRegex.test(testCaseText) || literal === 'Test123!' || literal === 'Admin@123') {
+          return {
+            safe: false,
+            error: `Hardcoded secret value "${literal}" from test case description detected in script.`,
+          };
+        }
+      }
+    }
+  }
+
+  return { safe: true };
+}
+
+/** POST /api/test-cases/:id/generate-script */
+export async function generateActionScript(req: Request, res: Response): Promise<void> {
+  const testCase = await prisma.testCase.findUnique({
+    where: { id: req.params.id },
+  });
+
+  if (!testCase) {
+    res.status(404).json({ success: false, error: 'Test case not found' });
+    return;
+  }
+
+  const userId = req.user!.userId;
+
+  try {
+    const scriptText = await ActionScriptGenerator.generate({
+      id: testCase.id,
+      title: testCase.title,
+      type: testCase.type,
+      preconditions: testCase.preconditions,
+      steps: testCase.steps,
+      expectedResult: testCase.expectedResult,
+    });
+
+    // Compile step text to find passwords and credentials mentioned in human descriptions
+    const stepsArray = Array.isArray(testCase.steps) ? (testCase.steps as unknown[]) : [];
+    const stepsText = stepsArray
+      .map(
+        (s) =>
+          `${(s as Record<string, string>).action || ''} ${(s as Record<string, string>).expected || ''}`,
+      )
+      .join(' ');
+    const testCaseText = `${testCase.title} ${testCase.preconditions || ''} ${testCase.expectedResult} ${stepsText}`;
+
+    const check = checkNoHardcodedSecrets(scriptText, testCaseText);
+    if (!check.safe) {
+      res.status(422).json({
+        success: false,
+        error: `Generated script failed safety check: ${check.error}`,
+        raw: scriptText,
+      });
+      return;
+    }
+
+    const defaultFormat = testCase.type === 'UI' ? 'python-playwright' : 'python-requests';
+
+    await writeAuditLog(userId, 'generate_script', 'TestCase', testCase.id);
+    res.json({
+      success: true,
+      data: {
+        format: defaultFormat,
+        content: scriptText,
+      },
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[ActionScript] Generation failed:', err);
+    res.status(500).json({
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to generate script',
+    });
+  }
+}
+
+/** PUT /api/test-cases/:id/script */
+export async function updateActionScript(req: Request, res: Response): Promise<void> {
+  const parsed = actionScriptSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: parsed.error.errors[0]?.message });
+    return;
+  }
+
+  const existing = await prisma.testCase.findUnique({
+    where: { id: req.params.id },
+  });
+
+  if (!existing) {
+    res.status(404).json({ success: false, error: 'Test case not found' });
+    return;
+  }
+
+  // Compile step text to find credentials mentioned in steps
+  const stepsArray = Array.isArray(existing.steps) ? (existing.steps as unknown[]) : [];
+  const stepsText = stepsArray
+    .map(
+      (s) =>
+        `${(s as Record<string, string>).action || ''} ${(s as Record<string, string>).expected || ''}`,
+    )
+    .join(' ');
+  const testCaseText = `${existing.title} ${existing.preconditions || ''} ${existing.expectedResult} ${stepsText}`;
+
+  const check = checkNoHardcodedSecrets(parsed.data.content, testCaseText);
+  if (!check.safe) {
+    res.status(400).json({
+      success: false,
+      error: `Safety Check Failed: ${check.error}`,
+    });
+    return;
+  }
+
+  const userId = req.user!.userId;
+  const updated = await prisma.testCase.update({
+    where: { id: req.params.id },
+    data: {
+      scriptFormat: parsed.data.format,
+      scriptContent: parsed.data.content,
+    },
+  });
+
+  await writeAuditLog(userId, 'save_script', 'TestCase', existing.id);
+  res.json({ success: true, data: updated });
 }

@@ -52,6 +52,8 @@ export interface TestCase {
   updatedAt: string;
   creator?: Partial<User>;
   requirement?: { id: string; title: string } | null;
+  scriptFormat?: string | null;
+  scriptContent?: string | null;
 }
 
 export interface ApiResponse<T> {

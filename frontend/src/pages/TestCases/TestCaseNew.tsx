@@ -39,7 +39,10 @@ export function TestCaseNew() {
     <div className="page-container">
       <div className="toolbar">
         <div className="toolbar-left">
-          <Link to={`/projects/${projectId}/test-cases`} style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
+          <Link
+            to={`/projects/${projectId}/test-cases`}
+            style={{ color: 'var(--color-text-muted)', display: 'flex' }}
+          >
             <ChevronLeft size={20} />
           </Link>
           <h2>New Test Case</h2>

@@ -16,7 +16,7 @@ export function RequirementNew() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim()) return;
-    
+
     setIsSubmitting(true);
     setError('');
 
@@ -43,7 +43,10 @@ export function RequirementNew() {
     <div className="page-container">
       <div className="toolbar">
         <div className="toolbar-left">
-          <Link to={`/projects/${projectId}/requirements`} style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
+          <Link
+            to={`/projects/${projectId}/requirements`}
+            style={{ color: 'var(--color-text-muted)', display: 'flex' }}
+          >
             <ChevronLeft size={20} />
           </Link>
           <h2>New Requirement</h2>
@@ -52,7 +55,15 @@ export function RequirementNew() {
 
       <div style={{ padding: '1.5rem', overflowY: 'auto' }}>
         {error && (
-          <div style={{ padding: '1rem', color: 'red', marginBottom: '1rem', backgroundColor: '#fee2e2', borderRadius: '4px' }}>
+          <div
+            style={{
+              padding: '1rem',
+              color: 'red',
+              marginBottom: '1rem',
+              backgroundColor: '#fee2e2',
+              borderRadius: '4px',
+            }}
+          >
             {error}
           </div>
         )}

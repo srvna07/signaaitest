@@ -22,7 +22,9 @@ export function Requirements() {
     setLoading(true);
     setError('');
     try {
-      const res = await apiClient.get<ApiResponse<Requirement[]>>(`/requirements?projectId=${projectId}`);
+      const res = await apiClient.get<ApiResponse<Requirement[]>>(
+        `/requirements?projectId=${projectId}`,
+      );
       if (res.success && res.data) {
         setRequirements(res.data);
       } else {

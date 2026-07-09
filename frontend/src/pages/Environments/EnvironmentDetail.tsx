@@ -127,7 +127,10 @@ export function EnvironmentDetail() {
     <div className="page-container">
       <div className="toolbar">
         <div className="toolbar-left">
-          <Link to={`/projects/${projectId}/environments`} style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
+          <Link
+            to={`/projects/${projectId}/environments`}
+            style={{ color: 'var(--color-text-muted)', display: 'flex' }}
+          >
             <ChevronLeft size={20} />
           </Link>
           <h2>{environment.name}</h2>
@@ -200,7 +203,16 @@ export function EnvironmentDetail() {
               />
             </div>
             <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '1rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500, fontSize: '0.85rem', cursor: 'pointer' }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  fontWeight: 500,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={editRequiresLogin}
@@ -208,39 +220,70 @@ export function EnvironmentDetail() {
                 />
                 Requires Auto-Login
               </label>
-              <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 1rem 1.5rem' }}>
+              <p
+                style={{
+                  fontSize: '0.78rem',
+                  color: 'var(--color-text-muted)',
+                  margin: '0.25rem 0 1rem 1.5rem',
+                }}
+              >
                 If enabled, the browser will auto-login before exploration and cache the session.
               </p>
               {editRequiresLogin && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '1.5rem' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.75rem',
+                    paddingLeft: '1.5rem',
+                  }}
+                >
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>Login Path (e.g. /login)</label>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                      Login Path (e.g. /login)
+                    </label>
                     <input
                       type="text"
                       value={editLoginPath}
                       onChange={(e) => setEditLoginPath(e.target.value)}
                       placeholder="/login"
-                      style={{ padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '4px' }}
+                      style={{
+                        padding: '0.5rem',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '4px',
+                      }}
                     />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>Username Secret Name</label>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                      Username Secret Name
+                    </label>
                     <input
                       type="text"
                       value={editLoginUser}
                       onChange={(e) => setEditLoginUser(e.target.value)}
                       placeholder="Name of secret holding the username"
-                      style={{ padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '4px' }}
+                      style={{
+                        padding: '0.5rem',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '4px',
+                      }}
                     />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>Password Secret Name</label>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                      Password Secret Name
+                    </label>
                     <input
                       type="text"
                       value={editLoginPass}
                       onChange={(e) => setEditLoginPass(e.target.value)}
                       placeholder="Name of secret holding the password"
-                      style={{ padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '4px' }}
+                      style={{
+                        padding: '0.5rem',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '4px',
+                      }}
                     />
                   </div>
                 </div>
@@ -290,14 +333,34 @@ export function EnvironmentDetail() {
               </div>
             </div>
             <div>
-              <h3 style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '0.25rem' }}>AUTO-LOGIN</h3>
+              <h3
+                style={{
+                  fontSize: '0.85rem',
+                  color: 'var(--color-text-muted)',
+                  marginBottom: '0.25rem',
+                }}
+              >
+                AUTO-LOGIN
+              </h3>
               <div style={{ fontSize: '0.9rem' }}>
                 {environment.requiresLogin ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                     <span style={{ color: '#16a34a', fontWeight: 500 }}>✓ Enabled</span>
-                    {environment.loginPath && <span>Login path: <code>{environment.loginPath}</code></span>}
-                    {environment.loginUsernameSecret && <span>Username secret: <code>{environment.loginUsernameSecret}</code></span>}
-                    {environment.loginPasswordSecret && <span>Password secret: <code>{environment.loginPasswordSecret}</code></span>}
+                    {environment.loginPath && (
+                      <span>
+                        Login path: <code>{environment.loginPath}</code>
+                      </span>
+                    )}
+                    {environment.loginUsernameSecret && (
+                      <span>
+                        Username secret: <code>{environment.loginUsernameSecret}</code>
+                      </span>
+                    )}
+                    {environment.loginPasswordSecret && (
+                      <span>
+                        Password secret: <code>{environment.loginPasswordSecret}</code>
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <span style={{ color: 'var(--color-text-muted)' }}>Disabled</span>

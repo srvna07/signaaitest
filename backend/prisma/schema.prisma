@@ -109,6 +109,10 @@ model TestCase {
   steps          Json         @default("[]")
   preconditions  String?
   expectedResult String
+  // The format of the executable script (e.g. "python-playwright" or "python-requests").
+  // Designed as an open string field to allow future extensibility (e.g. "typescript-playwright") without a schema change.
+  scriptFormat   String?      @map("script_format")
+  scriptContent  String?      @map("script_content")
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 

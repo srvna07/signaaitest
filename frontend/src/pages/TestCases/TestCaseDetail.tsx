@@ -21,6 +21,60 @@ export function TestCaseDetail() {
   const [isEditing, setIsEditing] = useState(false);
   const [globalError, setGlobalError] = useState('');
 
+  const [generatingScript, setGeneratingScript] = useState(false);
+  const [savingScript, setSavingScript] = useState(false);
+  const [scriptError, setScriptError] = useState('');
+  const [editingScriptText, setEditingScriptText] = useState<string | null>(null);
+  const [editingScriptFormat, setEditingScriptFormat] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (testCase) {
+      setEditingScriptText(testCase.scriptContent || null);
+      setEditingScriptFormat(testCase.scriptFormat || null);
+    }
+  }, [testCase]);
+
+  const handleGenerateScript = async () => {
+    setGeneratingScript(true);
+    setScriptError('');
+    try {
+      const res = await apiClient.post<ApiResponse<{ format: string; content: string }>>(
+        `/test-cases/${id}/generate-script`,
+      );
+      if (res.success && res.data) {
+        setEditingScriptText(res.data.content);
+        setEditingScriptFormat(res.data.format);
+      } else {
+        setScriptError(res.error || 'Failed to generate script');
+      }
+    } catch (err: unknown) {
+      setScriptError((err as Error).message || 'Error generating script');
+    } finally {
+      setGeneratingScript(false);
+    }
+  };
+
+  const handleSaveScript = async () => {
+    if (!editingScriptText || !editingScriptFormat) return;
+    setSavingScript(true);
+    setScriptError('');
+    try {
+      const res = await apiClient.put<ApiResponse<TestCase>>(`/test-cases/${id}/script`, {
+        format: editingScriptFormat,
+        content: editingScriptText,
+      });
+      if (res.success && res.data) {
+        setTestCase(res.data);
+      } else {
+        setScriptError(res.error || 'Failed to save script');
+      }
+    } catch (err: unknown) {
+      setScriptError((err as Error).message || 'Error saving script');
+    } finally {
+      setSavingScript(false);
+    }
+  };
+
   useEffect(() => {
     if (searchParams.get('edit') === 'true' && canEdit) {
       setIsEditing(true);
@@ -102,11 +156,22 @@ export function TestCaseDetail() {
     <div className="page-container">
       <div className="toolbar">
         <div className="toolbar-left">
-          <Link to={`/projects/${projectId}/test-cases`} style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
+          <Link
+            to={`/projects/${projectId}/test-cases`}
+            style={{ color: 'var(--color-text-muted)', display: 'flex' }}
+          >
             <ChevronLeft size={20} />
           </Link>
           <h2>{testCase.title}</h2>
           <span className={`badge badge-${testCase.type.toLowerCase()}`}>{testCase.type}</span>
+          {testCase.actionScript && (
+            <span
+              className="badge"
+              style={{ backgroundColor: '#e0f2fe', color: '#0369a1', fontSize: '0.75rem' }}
+            >
+              ⚡ Script
+            </span>
+          )}
         </div>
         <div className="toolbar-right">
           {canEdit && !isEditing && (
@@ -260,9 +325,193 @@ export function TestCaseDetail() {
                 {testCase.expectedResult}
               </div>
             </div>
+
+            <div
+              style={{
+                marginTop: '2.5rem',
+                paddingTop: '2.5rem',
+                borderTop: '1px solid var(--color-border)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '0.75rem',
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: '0.85rem',
+                    color: 'var(--color-text-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                  }}
+                >
+                  EXECUTABLE ACTION SCRIPT{' '}
+                  {testCase.scriptContent && (
+                    <span
+                      className="badge"
+                      style={{ backgroundColor: '#e0f2fe', color: '#0369a1', fontSize: '0.7rem' }}
+                    >
+                      ⚡ Configured ({testCase.scriptFormat})
+                    </span>
+                  )}
+                </h3>
+                {canEdit && (
+                  <button
+                    className="btn-secondary"
+                    onClick={handleGenerateScript}
+                    disabled={generatingScript}
+                    style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+                  >
+                    {generatingScript
+                      ? 'Generating...'
+                      : testCase.scriptContent
+                        ? 'Regenerate Script'
+                        : 'Generate Script'}
+                  </button>
+                )}
+              </div>
+
+              {generatingScript && (
+                <div
+                  style={{
+                    padding: '1.5rem',
+                    backgroundColor: '#f8fafc',
+                    border: '1px dashed var(--color-border)',
+                    borderRadius: '4px',
+                    textAlign: 'center',
+                    color: 'var(--color-text-muted)',
+                  }}
+                >
+                  AI is analyzing the steps and generating the action script...
+                </div>
+              )}
+
+              {scriptError && (
+                <div
+                  style={{
+                    padding: '1rem',
+                    color: '#b91c1c',
+                    backgroundColor: '#fef2f2',
+                    border: '1px solid #fca5a5',
+                    borderRadius: '4px',
+                    marginBottom: '1rem',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  {scriptError}
+                </div>
+              )}
+
+              {!generatingScript && (
+                <>
+                  {editingScriptText !== null && editingScriptFormat !== null ? (
+                    <div>
+                      <ScriptDisplay
+                        format={editingScriptFormat}
+                        content={editingScriptText}
+                        onChange={setEditingScriptText}
+                        disabled={!canEdit}
+                      />
+                      {canEdit && (
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                          <button
+                            className="btn-primary"
+                            onClick={handleSaveScript}
+                            disabled={savingScript}
+                            style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+                          >
+                            {savingScript ? 'Saving...' : 'Save Script'}
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            onClick={() => {
+                              setEditingScriptText(testCase.scriptContent || null);
+                              setEditingScriptFormat(testCase.scriptFormat || null);
+                            }}
+                            style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        padding: '1.5rem',
+                        backgroundColor: '#f8fafc',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '4px',
+                        color: 'var(--color-text-muted)',
+                        fontSize: '0.9rem',
+                        textAlign: 'center',
+                      }}
+                    >
+                      No executable script generated yet. Click &quot;Generate Script&quot; to
+                      create one automatically using AI.
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+interface ScriptDisplayProps {
+  format: string;
+  content: string;
+  onChange?: (val: string) => void;
+  disabled?: boolean;
+}
+
+function ScriptDisplay({ format, content, onChange, disabled }: ScriptDisplayProps) {
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          backgroundColor: '#0f172a',
+          padding: '0.5rem 0.75rem',
+          borderTopLeftRadius: '4px',
+          borderTopRightRadius: '4px',
+          borderBottom: '1px solid #334155',
+        }}
+      >
+        <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+          Format: {format}
+        </span>
+      </div>
+      <textarea
+        value={content}
+        onChange={(e) => onChange?.(e.target.value)}
+        rows={16}
+        disabled={disabled}
+        placeholder={`Executable ${format} source code`}
+        style={{
+          width: '100%',
+          fontFamily: 'monospace',
+          fontSize: '0.85rem',
+          padding: '0.75rem',
+          border: '1px solid var(--color-border)',
+          borderTop: 'none',
+          borderBottomLeftRadius: '4px',
+          borderBottomRightRadius: '4px',
+          backgroundColor: '#1e293b',
+          color: '#f8fafc',
+          resize: 'vertical',
+        }}
+      />
     </div>
   );
 }

@@ -56,27 +56,39 @@ async function performLogin(
   await stream.page.goto(loginUrl, { waitUntil: 'networkidle', timeout: 30000 });
 
   // Wait for the form to actually render in the React DOM before typing!
-  await stream.page.waitForSelector('#username', { timeout: 15000 }).catch(e => console.error('[DEBUG] waitForSelector failed:', e.message));
+  await stream.page
+    .waitForSelector('#username', { timeout: 15000 })
+    .catch((e) => console.error('[DEBUG] waitForSelector failed:', e.message));
   await stream.page.waitForTimeout(500); // Visual buffer
 
   // Forcefully fill the exact inputs
-  await stream.page.fill('#username', username).catch(e => console.error('[DEBUG] fill username failed:', e.message));
+  await stream.page
+    .fill('#username', username)
+    .catch((e) => console.error('[DEBUG] fill username failed:', e.message));
   await stream.page.waitForTimeout(500);
-  await stream.page.fill('#password', password).catch(e => console.error('[DEBUG] fill password failed:', e.message));
-  
+  await stream.page
+    .fill('#password', password)
+    .catch((e) => console.error('[DEBUG] fill password failed:', e.message));
+
   await stream.page.waitForTimeout(500);
-  await stream.page.click('button[type="submit"], button:has-text("Login")').catch(async e => {
+  await stream.page.click('button[type="submit"], button:has-text("Login")').catch(async (e) => {
     console.error('[DEBUG] click login button failed:', e.message);
-    await stream.page.keyboard.press('Enter').catch(e2 => console.error('[DEBUG] press Enter failed:', e2.message));
+    await stream.page.keyboard
+      .press('Enter')
+      .catch((e2) => console.error('[DEBUG] press Enter failed:', e2.message));
   });
 
   try {
     await Promise.race([
       stream.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 }),
-      stream.page.waitForFunction(() => {
-        const el = document.querySelector('#password') || document.querySelector('input[type="password"]');
-        return !el || (el as any).offsetParent === null;
-      }, { timeout: 15000 })
+      stream.page.waitForFunction(
+        () => {
+          const el =
+            document.querySelector('#password') || document.querySelector('input[type="password"]');
+          return !el || (el as any).offsetParent === null;
+        },
+        { timeout: 15000 },
+      ),
     ]);
   } catch {
     /* ignore timeout */
@@ -84,7 +96,7 @@ async function performLogin(
 
   // Check if password field is still visible (robust check for SPAs)
   const passwordInput = await stream.page.$('#password, input[type="password"]').catch(() => null);
-  if (passwordInput && await passwordInput.isVisible().catch(() => false)) {
+  if (passwordInput && (await passwordInput.isVisible().catch(() => false))) {
     return false; // login failed
   }
 
@@ -125,7 +137,9 @@ async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): 
   // Pipe all frames to the WebSocket client
   stream.on('frame', (frameBase64: string) => {
     let currentUrl = '';
-    try { currentUrl = stream.page.url(); } catch {}
+    try {
+      currentUrl = stream.page.url();
+    } catch {}
     send(ws, { type: 'frame', frame: frameBase64, url: currentUrl });
   });
 
@@ -177,7 +191,10 @@ async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): 
       }
 
       if (!username || !password) {
-        send(ws, { type: 'error', message: 'Credentials cannot be empty. Please configure Auto-Login settings.' });
+        send(ws, {
+          type: 'error',
+          message: 'Credentials cannot be empty. Please configure Auto-Login settings.',
+        });
         await stream.stop();
         ws.close();
         return;
@@ -208,8 +225,10 @@ async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): 
       // Navigate to target to check
       const checkUrl = new URL(targetPath, environment.baseUrl).toString();
       await stream.page.goto(checkUrl, { waitUntil: 'networkidle', timeout: 30000 });
-      const passwordInput = await stream.page.$('#password, input[type="password"]').catch(() => null);
-      if (passwordInput && await passwordInput.isVisible().catch(() => false)) {
+      const passwordInput = await stream.page
+        .$('#password, input[type="password"]')
+        .catch(() => null);
+      if (passwordInput && (await passwordInput.isVisible().catch(() => false))) {
         send(ws, { type: 'status', message: 'Cached session expired. Re-logging in...' });
         deleteSession(environmentId);
         // We can't re-start stream, so close and let caller retry
@@ -229,7 +248,9 @@ async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): 
         const finalPath = targetPath || '/';
         send(ws, { type: 'status', message: `Navigating to ${finalPath}...` });
         const fullUrl = new URL(finalPath, environment.baseUrl).toString();
-        await stream.page.goto(fullUrl, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => {});
+        await stream.page
+          .goto(fullUrl, { waitUntil: 'networkidle', timeout: 30000 })
+          .catch(() => {});
       } else {
         send(ws, { type: 'status', message: 'Staying on dashboard after login...' });
       }

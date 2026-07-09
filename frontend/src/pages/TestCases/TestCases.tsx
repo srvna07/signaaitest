@@ -24,7 +24,9 @@ export function TestCases() {
     setError('');
     setSelectedIds(new Set());
     try {
-      const res = await apiClient.get<ApiResponse<TestCase[]>>(`/test-cases?projectId=${projectId}`);
+      const res = await apiClient.get<ApiResponse<TestCase[]>>(
+        `/test-cases?projectId=${projectId}`,
+      );
       if (res.success && res.data) {
         setTestCases(res.data);
       } else {
@@ -177,13 +179,29 @@ export function TestCases() {
                     />
                   </td>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                    <Link to={`/projects/${projectId}/test-cases/${tc.id}`}>{tc.id.split('-')[0]}</Link>
+                    <Link to={`/projects/${projectId}/test-cases/${tc.id}`}>
+                      {tc.id.split('-')[0]}
+                    </Link>
                   </td>
                   <td>
                     <Link to={`/projects/${projectId}/test-cases/${tc.id}`}>{tc.title}</Link>
                   </td>
                   <td>
-                    <span className={`badge badge-${tc.type.toLowerCase()}`}>{tc.type}</span>
+                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                      <span className={`badge badge-${tc.type.toLowerCase()}`}>{tc.type}</span>
+                      {tc.scriptContent && (
+                        <span
+                          className="badge"
+                          style={{
+                            backgroundColor: '#e0f2fe',
+                            color: '#0369a1',
+                            fontSize: '0.7rem',
+                          }}
+                        >
+                          ⚡ Script ({tc.scriptFormat || 'python'})
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td>{tc.requirement?.title || '-'}</td>
                   <td>{new Date(tc.createdAt).toLocaleDateString()}</td>

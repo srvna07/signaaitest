@@ -37,7 +37,7 @@ export function Layout() {
   return (
     <div className={styles.layout}>
       <aside className={styles.sidebar}>
-        <div 
+        <div
           className={styles.sidebarHeader}
           onClick={() => navigate('/')}
           style={{ cursor: 'pointer' }}
@@ -89,7 +89,15 @@ export function Layout() {
         <header className={styles.header}>
           <div className={styles.headerLeft}>
             {project && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 500 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                }}
+              >
                 <span style={{ color: 'var(--color-text-muted)' }}>Project /</span>
                 <span style={{ color: 'var(--color-text)' }}>{project.name}</span>
               </div>

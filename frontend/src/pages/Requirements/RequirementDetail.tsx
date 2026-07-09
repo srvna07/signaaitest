@@ -68,7 +68,7 @@ export function RequirementDetail() {
   const [useAutoLogin, setUseAutoLogin] = useState(true);
 
   useEffect(() => {
-    const env = environments.find(e => e.id === selectedEnvId);
+    const env = environments.find((e) => e.id === selectedEnvId);
     if (env) {
       setUseAutoLogin(!!env.requiresLogin);
     }
@@ -196,14 +196,16 @@ export function RequirementDetail() {
         const ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-          ws.send(JSON.stringify({
-            type: 'start',
-            requirementId: id,
-            environmentId: selectedEnvId,
-            path: explorePath,
-            scope: generationScope,
-            useAutoLogin,
-          }));
+          ws.send(
+            JSON.stringify({
+              type: 'start',
+              requirementId: id,
+              environmentId: selectedEnvId,
+              path: explorePath,
+              scope: generationScope,
+              useAutoLogin,
+            }),
+          );
         };
 
         ws.onmessage = (event) => {
@@ -241,7 +243,10 @@ export function RequirementDetail() {
 
         ws.onclose = () => {
           // If we haven't received a result yet, mark as done
-          setIsGenerating((prev) => { if (prev) setGenerateError('Connection closed unexpectedly.'); return false; });
+          setIsGenerating((prev) => {
+            if (prev) setGenerateError('Connection closed unexpectedly.');
+            return false;
+          });
         };
       }
     } catch (err: unknown) {
@@ -300,7 +305,10 @@ export function RequirementDetail() {
     <div className="page-container">
       <div className="toolbar">
         <div className="toolbar-left">
-          <Link to={`/projects/${projectId}/requirements`} style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
+          <Link
+            to={`/projects/${projectId}/requirements`}
+            style={{ color: 'var(--color-text-muted)', display: 'flex' }}
+          >
             <ChevronLeft size={20} />
           </Link>
           <h2>{requirement.title}</h2>
@@ -487,9 +495,16 @@ export function RequirementDetail() {
                       }}
                     />
                   </div>
-                  
-                  {environments.find(e => e.id === selectedEnvId)?.requiresLogin && (
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+
+                  {environments.find((e) => e.id === selectedEnvId)?.requiresLogin && (
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        fontSize: '0.85rem',
+                      }}
+                    >
                       <input
                         type="checkbox"
                         checked={useAutoLogin}
@@ -631,7 +646,16 @@ export function RequirementDetail() {
               <span>Live Browser — {liveStatus || 'Connecting...'}</span>
             </div>
             {liveUrl && (
-              <div style={{ padding: '0.25rem 1rem', backgroundColor: '#334155', color: '#cbd5e1', fontSize: '0.75rem', fontFamily: 'monospace', borderBottom: '1px solid #0f172a' }}>
+              <div
+                style={{
+                  padding: '0.25rem 1rem',
+                  backgroundColor: '#334155',
+                  color: '#cbd5e1',
+                  fontSize: '0.75rem',
+                  fontFamily: 'monospace',
+                  borderBottom: '1px solid #0f172a',
+                }}
+              >
                 {liveUrl}
               </div>
             )}
@@ -639,10 +663,23 @@ export function RequirementDetail() {
               <img
                 src={liveFrame}
                 alt="Live browser stream"
-                style={{ width: '100%', display: 'block', maxHeight: '480px', objectFit: 'contain', backgroundColor: '#000' }}
+                style={{
+                  width: '100%',
+                  display: 'block',
+                  maxHeight: '480px',
+                  objectFit: 'contain',
+                  backgroundColor: '#000',
+                }}
               />
             ) : (
-              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)', backgroundColor: '#f8fafc' }}>
+              <div
+                style={{
+                  padding: '3rem',
+                  textAlign: 'center',
+                  color: 'var(--color-text-muted)',
+                  backgroundColor: '#f8fafc',
+                }}
+              >
                 {generationMode === 'browser' ? 'Launching browser...' : 'Generating test cases...'}
               </div>
             )}
@@ -668,7 +705,16 @@ export function RequirementDetail() {
                 setGenerateError('');
                 setShowGenerationOptions(true);
               }}
-              style={{ marginLeft: '1rem', padding: '0.25rem 0.75rem', fontSize: '0.8rem', border: '1px solid #fca5a5', borderRadius: '4px', background: 'white', cursor: 'pointer', color: '#dc2626' }}
+              style={{
+                marginLeft: '1rem',
+                padding: '0.25rem 0.75rem',
+                fontSize: '0.8rem',
+                border: '1px solid #fca5a5',
+                borderRadius: '4px',
+                background: 'white',
+                cursor: 'pointer',
+                color: '#dc2626',
+              }}
             >
               Retry
             </button>
