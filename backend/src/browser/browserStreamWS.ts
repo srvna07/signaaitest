@@ -55,28 +55,20 @@ async function performLogin(
   const loginUrl = new URL(loginPath, baseUrl).toString();
   await stream.page.goto(loginUrl, { waitUntil: 'networkidle', timeout: 30000 });
 
-  // Add a small pause so the user can see the page loaded
-  await stream.page.waitForTimeout(1000);
+  // Wait for the form to actually render in the React DOM before typing!
+  await stream.page.waitForSelector('#username', { timeout: 15000 }).catch(e => console.error('[DEBUG] waitForSelector failed:', e.message));
+  await stream.page.waitForTimeout(500); // Visual buffer
 
-  // Use 'type' with a delay so it types like a human and streams the frames to the UI
-  await stream.page
-    .type(
-      'input[type="email"], input[name="email"], input[name="username"], input[type="text"]',
-      username,
-      { delay: 50 }
-    )
-    .catch(() => {
-      /* ignore */
-    });
-    
+  // Forcefully fill the exact inputs
+  await stream.page.fill('#username', username).catch(e => console.error('[DEBUG] fill username failed:', e.message));
   await stream.page.waitForTimeout(500);
-
-  await stream.page.type('input[type="password"]', password, { delay: 50 }).catch(() => {
-    /* ignore */
-  });
+  await stream.page.fill('#password', password).catch(e => console.error('[DEBUG] fill password failed:', e.message));
   
   await stream.page.waitForTimeout(500);
-  await stream.page.keyboard.press('Enter');
+  await stream.page.click('button[type="submit"], button:has-text("Login")').catch(async e => {
+    console.error('[DEBUG] click login button failed:', e.message);
+    await stream.page.keyboard.press('Enter').catch(e2 => console.error('[DEBUG] press Enter failed:', e2.message));
+  });
 
   try {
     await stream.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 });
@@ -84,9 +76,9 @@ async function performLogin(
     /* navigation might not happen */
   }
 
-  // Check if still on login page
-  const currentUrl = stream.page.url();
-  if (currentUrl.includes(loginPath)) {
+  // Check if password field is still visible (robust check for SPAs)
+  const passwordInput = await stream.page.$('#password, input[type="password"]').catch(() => null);
+  if (passwordInput && await passwordInput.isVisible().catch(() => false)) {
     return false; // login failed
   }
 
@@ -150,7 +142,7 @@ async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): 
 
     // ── Auto-login if needed ───────────────────────────────────────────────
     if (envRequiresLogin && !cachedSessionPath) {
-      const loginPath = environment.loginPath ?? '/login';
+      const loginPath = environment.loginPath || '/';
 
       // Resolve secrets
       let username = '';
@@ -160,14 +152,29 @@ async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): 
         const usernameSecret = await prisma.secret.findFirst({
           where: { name: environment.loginUsernameSecret, environmentId },
         });
-        if (usernameSecret) username = decryptSecret(usernameSecret.encryptedValue);
+        if (usernameSecret) {
+          username = decryptSecret(usernameSecret.encryptedValue);
+        } else {
+          username = environment.loginUsernameSecret; // fallback to raw string
+        }
       }
 
       if (environment.loginPasswordSecret) {
         const passwordSecret = await prisma.secret.findFirst({
           where: { name: environment.loginPasswordSecret, environmentId },
         });
-        if (passwordSecret) password = decryptSecret(passwordSecret.encryptedValue);
+        if (passwordSecret) {
+          password = decryptSecret(passwordSecret.encryptedValue);
+        } else {
+          password = environment.loginPasswordSecret; // fallback to raw string
+        }
+      }
+
+      if (!username || !password) {
+        send(ws, { type: 'error', message: 'Credentials cannot be empty. Please configure Auto-Login settings.' });
+        await stream.stop();
+        ws.close();
+        return;
       }
 
       const loginOk = await performLogin(
@@ -192,12 +199,12 @@ async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): 
 
     // ── If cached session was used, verify we are NOT on the login page ───
     if (sessionUsed && envRequiresLogin) {
-      const loginPath = environment.loginPath ?? '/login';
+      const loginPath = environment.loginPath || '/';
       // Navigate to target to check
       const checkUrl = new URL(targetPath, environment.baseUrl).toString();
       await stream.page.goto(checkUrl, { waitUntil: 'networkidle', timeout: 30000 });
-      const currentUrl = stream.page.url();
-      if (currentUrl.includes(loginPath)) {
+      const passwordInput = await stream.page.$('#password, input[type="password"]').catch(() => null);
+      if (passwordInput && await passwordInput.isVisible().catch(() => false)) {
         send(ws, { type: 'status', message: 'Cached session expired. Re-logging in...' });
         deleteSession(environmentId);
         // We can't re-start stream, so close and let caller retry
@@ -210,10 +217,17 @@ async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): 
         return;
       }
     } else {
-      // Navigate to target path
-      send(ws, { type: 'status', message: `Navigating to ${targetPath || '/'}...` });
-      const fullUrl = new URL(targetPath, environment.baseUrl).toString();
-      await stream.page.goto(fullUrl, { waitUntil: 'networkidle', timeout: 30000 });
+      const isFreshLogin = envRequiresLogin && !cachedSessionPath;
+      const shouldNavigate = targetPath && targetPath !== '/';
+
+      if (!isFreshLogin || shouldNavigate) {
+        const finalPath = targetPath || '/';
+        send(ws, { type: 'status', message: `Navigating to ${finalPath}...` });
+        const fullUrl = new URL(finalPath, environment.baseUrl).toString();
+        await stream.page.goto(fullUrl, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => {});
+      } else {
+        send(ws, { type: 'status', message: 'Staying on dashboard after login...' });
+      }
     }
 
     send(ws, { type: 'status', message: 'Page loaded. Taking screenshot and analysing...' });
