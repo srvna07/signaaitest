@@ -44,7 +44,7 @@ export function Layout() {
           title="Back to All Projects"
         >
           <FolderGit2 className={styles.logoIcon} />
-          <span className={styles.logoText}>Signa AI Test</span>
+          <span className={styles.logoText}>AI Testing</span>
         </div>
 
         <nav className={styles.nav}>

@@ -162,7 +162,7 @@ export function ProjectList() {
           <div className={styles.headerLeft}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <FolderGit2 className={styles.logoIcon} size={20} />
-              <span className={styles.logoText}>Signa AI Test</span>
+              <span className={styles.logoText}>AI Testing</span>
             </div>
           </div>
           <div className={styles.headerRight}>

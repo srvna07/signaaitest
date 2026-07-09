@@ -41,7 +41,7 @@ export function Login() {
     <div className={styles.container}>
       <div className={styles.card}>
         <div className={styles.header}>
-          <h1>Signa AI Test</h1>
+          <h1>AI Testing</h1>
           <p>Sign in to your account</p>
         </div>
 
