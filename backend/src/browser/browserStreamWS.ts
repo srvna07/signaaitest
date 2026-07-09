@@ -71,9 +71,15 @@ async function performLogin(
   });
 
   try {
-    await stream.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 });
+    await Promise.race([
+      stream.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 }),
+      stream.page.waitForFunction(() => {
+        const el = document.querySelector('#password') || document.querySelector('input[type="password"]');
+        return !el || el.offsetParent === null;
+      }, { timeout: 15000 })
+    ]);
   } catch {
-    /* navigation might not happen */
+    /* ignore timeout */
   }
 
   // Check if password field is still visible (robust check for SPAs)
