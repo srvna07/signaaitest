@@ -75,16 +75,21 @@ ${requirementText}
       const response = await Promise.race([model.generateContent(prompt), timeoutPromise]);
 
       let text = response.response.text();
-      // Clean markdown code blocks if present
-      text = text
-        .replace(/^```json\s*/, '')
-        .replace(/\s*```$/, '')
-        .trim();
+      
+      const firstBracket = text.indexOf('[');
+      const lastBracket = text.lastIndexOf(']');
+      if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+        text = text.substring(firstBracket, lastBracket + 1);
+      } else {
+        text = text.trim();
+      }
+
       let parsedJson: unknown;
 
       try {
         parsedJson = JSON.parse(text);
       } catch (e) {
+        console.error("Failed to parse JSON. Raw AI output:", text);
         throw new Error('Failed to parse AI response as JSON.');
       }
 
@@ -173,15 +178,21 @@ ${domTree}
       ]);
 
       let text = response.response.text();
-      text = text
-        .replace(/^```json\s*/, '')
-        .replace(/\s*```$/, '')
-        .trim();
+      
+      const firstBracket = text.indexOf('[');
+      const lastBracket = text.lastIndexOf(']');
+      if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+        text = text.substring(firstBracket, lastBracket + 1);
+      } else {
+        text = text.trim();
+      }
+
       let parsedJson: unknown;
 
       try {
         parsedJson = JSON.parse(text);
       } catch (e) {
+        console.error("Failed to parse JSON. Raw AI output:", text);
         throw new Error('Failed to parse AI response as JSON.');
       }
 
