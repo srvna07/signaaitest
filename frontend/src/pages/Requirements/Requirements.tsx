@@ -56,7 +56,7 @@ export function Requirements() {
 
   const handleEdit = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    navigate(`/requirements/${id}?edit=true`);
+    navigate(`/projects/${projectId}/requirements/${id}?edit=true`);
   };
 
   return (
@@ -100,7 +100,7 @@ export function Requirements() {
               requirements.map((req) => (
                 <tr
                   key={req.id}
-                  onClick={() => navigate(`/requirements/${req.id}`)}
+                  onClick={() => navigate(`/projects/${projectId}/requirements/${req.id}`)}
                   style={{ cursor: 'pointer' }}
                   className="hover-row"
                 >

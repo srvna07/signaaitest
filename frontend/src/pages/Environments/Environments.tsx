@@ -56,7 +56,7 @@ export function Environments() {
 
   const handleEdit = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    navigate(`/environments/${id}?edit=true`);
+    navigate(`/projects/${projectId}/environments/${id}?edit=true`);
   };
 
   return (
@@ -96,7 +96,7 @@ export function Environments() {
               environments.map((env) => (
                 <tr
                   key={env.id}
-                  onClick={() => navigate(`/environments/${env.id}`)}
+                  onClick={() => navigate(`/projects/${projectId}/environments/${env.id}`)}
                   style={{ cursor: 'pointer' }}
                   className="hover-row"
                 >

@@ -115,9 +115,6 @@ export function EnvironmentDetail() {
             <ChevronLeft size={20} />
           </Link>
           <h2>{environment.name}</h2>
-          <span style={{ fontFamily: 'monospace', color: 'var(--color-primary)' }}>
-            {environment.baseUrl}
-          </span>
         </div>
         <div className="toolbar-right">
           {canEdit && !isEditing && (

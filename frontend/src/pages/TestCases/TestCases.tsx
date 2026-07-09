@@ -76,7 +76,7 @@ export function TestCases() {
 
   const handleEdit = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    navigate(`/test-cases/${id}?edit=true`);
+    navigate(`/projects/${projectId}/test-cases/${id}?edit=true`);
   };
 
   const toggleSelectAll = () => {
@@ -126,7 +126,7 @@ export function TestCases() {
             </button>
           )}
           {canEdit && (
-            <Link to="/test-cases/new" className="btn-primary">
+            <Link to={`/projects/${projectId}/test-cases/new`} className="btn-primary">
               <Plus size={16} /> New Test Case
             </Link>
           )}
@@ -177,10 +177,10 @@ export function TestCases() {
                     />
                   </td>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                    <Link to={`/test-cases/${tc.id}`}>{tc.id.split('-')[0]}</Link>
+                    <Link to={`/projects/${projectId}/test-cases/${tc.id}`}>{tc.id.split('-')[0]}</Link>
                   </td>
                   <td>
-                    <Link to={`/test-cases/${tc.id}`}>{tc.title}</Link>
+                    <Link to={`/projects/${projectId}/test-cases/${tc.id}`}>{tc.title}</Link>
                   </td>
                   <td>
                     <span className={`badge badge-${tc.type.toLowerCase()}`}>{tc.type}</span>
