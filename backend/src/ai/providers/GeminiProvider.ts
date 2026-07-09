@@ -129,10 +129,19 @@ ${requirementText}
           : 'Generate both UI and API test cases where appropriate.';
 
     const prompt = `
-You are a QA automation expert. Given the following requirement, a screenshot of the live page, and a text representation of the page's interactive elements (DOM/accessibility tree), generate a comprehensive list of test cases in JSON format.
+You are a QA automation expert. Your task is STRICTLY LIMITED to generating test cases for the ONE specific requirement described below. You MUST NOT generate test cases for any other functionality visible on the page that is unrelated to this requirement.
+
 ${scopeInstruction}
 
-IMPORTANT: Base your test cases on the ACTUAL elements visible in the screenshot and the provided DOM tree. Use real button labels, link text, form fields, and placeholders that you can see. Do NOT make generic assumptions.
+FOCUS REQUIREMENT — only generate test cases for functionality directly related to:
+  Title: ${requirementText.split('\n')[0].replace('Title: ', '')}
+  Description: ${requirementText.split('\n')[1]?.replace('Description: ', '') ?? ''}
+
+IMPORTANT RULES:
+- If a page element (button, link, form field) is NOT directly relevant to the requirement above, EXCLUDE it.
+- Bias toward excluding uncertain elements rather than including them.
+- Base your test cases on the ACTUAL elements visible in the screenshot and the provided DOM tree. Use real button labels, link text, form fields, and placeholders you can see.
+- Do NOT make generic assumptions about elements not visible.
 
 The output MUST be a JSON array of objects conforming exactly to this structure:
 [

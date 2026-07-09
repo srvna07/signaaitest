@@ -19,6 +19,10 @@ export interface Environment {
   variables: Record<string, string>;
   createdAt: string;
   creator?: Partial<User>;
+  requiresLogin: boolean;
+  loginPath?: string | null;
+  loginUsernameSecret?: string | null;
+  loginPasswordSecret?: string | null;
 }
 
 export interface Requirement {

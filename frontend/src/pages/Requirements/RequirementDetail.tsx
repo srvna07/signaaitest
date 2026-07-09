@@ -54,7 +54,11 @@ export function RequirementDetail() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // New Generation Options State
+  // Live browser stream state
+  const [liveFrame, setLiveFrame] = useState<string>('');
+  const [liveStatus, setLiveStatus] = useState<string>('');
+
+  // Generation Options State
   const [showGenerationOptions, setShowGenerationOptions] = useState(false);
   const [generationScope, setGenerationScope] = useState<'UI' | 'API' | 'BOTH'>('BOTH');
   const [generationMode, setGenerationMode] = useState<'text' | 'browser' | null>(null);
@@ -151,6 +155,8 @@ export function RequirementDetail() {
     setSaveSuccess(false);
     setGeneratedCases([]);
     setGeneratedScreenshot('');
+    setLiveFrame('');
+    setLiveStatus('');
     setShowGenerationOptions(false);
 
     try {
@@ -160,8 +166,6 @@ export function RequirementDetail() {
           { projectId },
         );
         if (res.success && res.data) {
-          // Filter locally based on scope if needed, or pass scope to backend.
-          // For simplicity we just use what's returned.
           const filteredData = res.data.filter(
             (tc) => generationScope === 'BOTH' || tc.type === generationScope,
           );
@@ -170,31 +174,65 @@ export function RequirementDetail() {
         } else {
           setGenerateError(res.error || 'AI generation failed');
         }
+        setIsGenerating(false);
       } else {
-        if (!selectedEnvId) {
-          throw new Error('Please select an environment');
-        }
-        const res = await apiClient.post<
-          ApiResponse<GeneratedTestCase[]> & { screenshot?: string }
-        >(`/requirements/${id}/generate-from-browser`, {
-          environmentId: selectedEnvId,
-          path: explorePath,
-          scope: generationScope,
-          projectId,
-        });
-        if (res.success && res.data) {
-          setGeneratedCases(res.data);
-          if (res.screenshot) {
-            setGeneratedScreenshot(res.screenshot);
+        // ── WebSocket browser stream ──────────────────────────────────
+        if (!selectedEnvId) throw new Error('Please select an environment');
+
+        const token = localStorage.getItem('token');
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws/browser-stream?token=${token ?? ''}`;
+
+        const ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          ws.send(JSON.stringify({
+            type: 'start',
+            requirementId: id,
+            environmentId: selectedEnvId,
+            path: explorePath,
+            scope: generationScope,
+          }));
+        };
+
+        ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data as string) as {
+            type: string;
+            frame?: string;
+            data?: GeneratedTestCase[];
+            screenshot?: string;
+            message?: string;
+          };
+          if (msg.type === 'frame' && msg.frame) {
+            setLiveFrame(`data:image/jpeg;base64,${msg.frame}`);
+          } else if (msg.type === 'status') {
+            setLiveStatus(msg.message ?? '');
+          } else if (msg.type === 'result') {
+            setGeneratedCases(msg.data ?? []);
+            if (msg.screenshot) setGeneratedScreenshot(msg.screenshot);
+            setSelectedIndices(new Set((msg.data ?? []).map((_, i) => i)));
+            setLiveFrame('');
+            setIsGenerating(false);
+          } else if (msg.type === 'error') {
+            setGenerateError(msg.message ?? 'Browser generation failed');
+            setLiveFrame('');
+            setIsGenerating(false);
           }
-          setSelectedIndices(new Set(res.data.map((_, i) => i)));
-        } else {
-          setGenerateError(res.error || 'Browser AI generation failed');
-        }
+        };
+
+        ws.onerror = () => {
+          setGenerateError('WebSocket connection error. Is the backend running?');
+          setLiveFrame('');
+          setIsGenerating(false);
+        };
+
+        ws.onclose = () => {
+          // If we haven't received a result yet, mark as done
+          setIsGenerating((prev) => { if (prev) setGenerateError('Connection closed unexpectedly.'); return false; });
+        };
       }
     } catch (err: unknown) {
-      setGenerateError((err as Error).message || 'AI generation failed (Timeout or server error)');
-    } finally {
+      setGenerateError((err as Error).message || 'AI generation failed');
       setIsGenerating(false);
     }
   };
@@ -538,19 +576,46 @@ export function RequirementDetail() {
         {isGenerating && (
           <div
             style={{
-              padding: '2rem',
-              textAlign: 'center',
-              backgroundColor: '#f1f5f9',
+              marginBottom: '1.5rem',
+              border: '1px solid var(--color-border)',
               borderRadius: '8px',
-              marginBottom: '2rem',
+              overflow: 'hidden',
             }}
           >
-            <div style={{ fontSize: '1.2rem', fontWeight: 500, marginBottom: '0.5rem' }}>
-              {generationMode === 'browser'
-                ? 'Navigating to live URL and analyzing...'
-                : 'Generating test cases...'}
+            <div
+              style={{
+                padding: '0.75rem 1rem',
+                backgroundColor: '#1e293b',
+                color: 'white',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+              }}
+            >
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: '#22c55e',
+                  animation: 'pulse 1s infinite',
+                }}
+              />
+              <span>Live Browser — {liveStatus || 'Connecting...'}</span>
             </div>
-            <div style={{ color: 'var(--color-text-muted)' }}>This may take up to 45 seconds.</div>
+            {liveFrame ? (
+              <img
+                src={liveFrame}
+                alt="Live browser stream"
+                style={{ width: '100%', display: 'block', maxHeight: '480px', objectFit: 'contain', backgroundColor: '#000' }}
+              />
+            ) : (
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)', backgroundColor: '#f8fafc' }}>
+                {generationMode === 'browser' ? 'Launching browser...' : 'Generating test cases...'}
+              </div>
+            )}
           </div>
         )}
 
@@ -568,6 +633,15 @@ export function RequirementDetail() {
             }}
           >
             <span>{generateError}</span>
+            <button
+              onClick={() => {
+                setGenerateError('');
+                setShowGenerationOptions(true);
+              }}
+              style={{ marginLeft: '1rem', padding: '0.25rem 0.75rem', fontSize: '0.8rem', border: '1px solid #fca5a5', borderRadius: '4px', background: 'white', cursor: 'pointer', color: '#dc2626' }}
+            >
+              Retry
+            </button>
           </div>
         )}
 

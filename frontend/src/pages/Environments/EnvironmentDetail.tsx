@@ -20,6 +20,10 @@ export function EnvironmentDetail() {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editUrl, setEditUrl] = useState('');
+  const [editRequiresLogin, setEditRequiresLogin] = useState(false);
+  const [editLoginPath, setEditLoginPath] = useState('');
+  const [editLoginUser, setEditLoginUser] = useState('');
+  const [editLoginPass, setEditLoginPass] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
@@ -27,6 +31,10 @@ export function EnvironmentDetail() {
       setIsEditing(true);
       setEditName(environment.name);
       setEditUrl(environment.baseUrl);
+      setEditRequiresLogin(environment.requiresLogin ?? false);
+      setEditLoginPath(environment.loginPath ?? '');
+      setEditLoginUser(environment.loginUsernameSecret ?? '');
+      setEditLoginPass(environment.loginPasswordSecret ?? '');
     }
   }, [searchParams, canEdit, environment]);
 
@@ -52,6 +60,10 @@ export function EnvironmentDetail() {
     if (!environment) return;
     setEditName(environment.name);
     setEditUrl(environment.baseUrl);
+    setEditRequiresLogin(environment.requiresLogin ?? false);
+    setEditLoginPath(environment.loginPath ?? '');
+    setEditLoginUser(environment.loginUsernameSecret ?? '');
+    setEditLoginPass(environment.loginPasswordSecret ?? '');
     setIsEditing(true);
   };
 
@@ -65,6 +77,10 @@ export function EnvironmentDetail() {
         name: editName.trim(),
         baseUrl: editUrl.trim(),
         variables: environment?.variables || {},
+        requiresLogin: editRequiresLogin,
+        loginPath: editLoginPath.trim() || null,
+        loginUsernameSecret: editLoginUser.trim() || null,
+        loginPasswordSecret: editLoginPass.trim() || null,
       });
       if (res.success && res.data) {
         setEnvironment(res.data);
@@ -183,6 +199,53 @@ export function EnvironmentDetail() {
                 }}
               />
             </div>
+            <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '1rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500, fontSize: '0.85rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={editRequiresLogin}
+                  onChange={(e) => setEditRequiresLogin(e.target.checked)}
+                />
+                Requires Auto-Login
+              </label>
+              <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 1rem 1.5rem' }}>
+                If enabled, the browser will auto-login before exploration and cache the session.
+              </p>
+              {editRequiresLogin && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '1.5rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>Login Path (e.g. /login)</label>
+                    <input
+                      type="text"
+                      value={editLoginPath}
+                      onChange={(e) => setEditLoginPath(e.target.value)}
+                      placeholder="/login"
+                      style={{ padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '4px' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>Username Secret Name</label>
+                    <input
+                      type="text"
+                      value={editLoginUser}
+                      onChange={(e) => setEditLoginUser(e.target.value)}
+                      placeholder="Name of secret holding the username"
+                      style={{ padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '4px' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>Password Secret Name</label>
+                    <input
+                      type="text"
+                      value={editLoginPass}
+                      onChange={(e) => setEditLoginPass(e.target.value)}
+                      placeholder="Name of secret holding the password"
+                      style={{ padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '4px' }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
               <button type="submit" className="btn-primary" disabled={isUpdating}>
                 {isUpdating ? 'Saving...' : 'Save Changes'}
@@ -224,6 +287,21 @@ export function EnvironmentDetail() {
               </h3>
               <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem', fontFamily: 'monospace' }}>
                 {environment.baseUrl}
+              </div>
+            </div>
+            <div>
+              <h3 style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '0.25rem' }}>AUTO-LOGIN</h3>
+              <div style={{ fontSize: '0.9rem' }}>
+                {environment.requiresLogin ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <span style={{ color: '#16a34a', fontWeight: 500 }}>✓ Enabled</span>
+                    {environment.loginPath && <span>Login path: <code>{environment.loginPath}</code></span>}
+                    {environment.loginUsernameSecret && <span>Username secret: <code>{environment.loginUsernameSecret}</code></span>}
+                    {environment.loginPasswordSecret && <span>Password secret: <code>{environment.loginPasswordSecret}</code></span>}
+                  </div>
+                ) : (
+                  <span style={{ color: 'var(--color-text-muted)' }}>Disabled</span>
+                )}
               </div>
             </div>
             <div>

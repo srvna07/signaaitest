@@ -10,6 +10,10 @@ const createSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   baseUrl: z.string().url('baseUrl must be a valid URL'),
   variables: z.record(z.string()).optional().default({}),
+  requiresLogin: z.boolean().optional().default(false),
+  loginPath: z.string().optional().nullable(),
+  loginUsernameSecret: z.string().optional().nullable(),
+  loginPasswordSecret: z.string().optional().nullable(),
 });
 
 const updateSchema = createSchema.omit({ projectId: true }).partial();
