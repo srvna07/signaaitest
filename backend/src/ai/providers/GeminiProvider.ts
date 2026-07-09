@@ -18,6 +18,41 @@ const testCaseSchema = z.object({
 
 const generatedTestCasesSchema = z.array(testCaseSchema);
 
+/** Attempt to repair a truncated JSON array by closing any open braces/brackets. */
+function repairTruncatedJson(raw: string): string {
+  // Extract from first '[' to last complete '}' before the truncation point
+  const firstBracket = raw.indexOf('[');
+  if (firstBracket === -1) return raw;
+
+  let text = raw.substring(firstBracket);
+
+  // Remove any trailing comma + whitespace (common at truncation point)
+  text = text.replace(/,\s*$/, '');
+
+  // Count open braces and brackets to determine what needs closing
+  let openBraces = 0;
+  let openBrackets = 0;
+  let inString = false;
+  let escape = false;
+
+  for (const ch of text) {
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') openBraces++;
+    else if (ch === '}') openBraces--;
+    else if (ch === '[') openBrackets++;
+    else if (ch === ']') openBrackets--;
+  }
+
+  // Close unclosed structures
+  for (let i = 0; i < openBraces; i++) text += '}';
+  for (let i = 0; i < openBrackets; i++) text += ']';
+
+  return text;
+}
+
 export class GeminiProvider implements AIProvider {
   private genAI: GoogleGenerativeAI;
   // We use the '-latest' alias rather than pinning a specific version (like gemini-1.5-flash)
@@ -40,6 +75,7 @@ export class GeminiProvider implements AIProvider {
       model: this.modelName,
       generationConfig: {
         responseMimeType: 'application/json',
+        maxOutputTokens: 8192,
       },
     });
 
@@ -118,6 +154,7 @@ ${requirementText}
       model: this.modelName,
       generationConfig: {
         responseMimeType: 'application/json',
+        maxOutputTokens: 8192,
       },
     });
 
@@ -167,9 +204,9 @@ Extracted Interactive Elements:
 ${domTree}
 `;
 
-    // 45s timeout implementation for vision
+    // 90s timeout for vision + generation (screenshot upload adds latency)
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('AI request timed out after 45 seconds')), 45000);
+      setTimeout(() => reject(new Error('AI request timed out after 90 seconds')), 90000);
     });
 
     try {
@@ -187,21 +224,16 @@ ${domTree}
       ]);
 
       let text = response.response.text();
-      
-      const firstBracket = text.indexOf('[');
-      const lastBracket = text.lastIndexOf(']');
-      if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-        text = text.substring(firstBracket, lastBracket + 1);
-      } else {
-        text = text.trim();
-      }
+
+      // Repair truncated JSON before parsing
+      text = repairTruncatedJson(text);
 
       let parsedJson: unknown;
 
       try {
         parsedJson = JSON.parse(text);
       } catch (e) {
-        console.error("Failed to parse JSON. Raw AI output:", text);
+        console.error('Failed to parse JSON. Raw AI output:', text);
         throw new Error('Failed to parse AI response as JSON.');
       }
 
