@@ -9,6 +9,7 @@ import { TestCaseDetail } from './pages/TestCases/TestCaseDetail';
 import { TestCaseNew } from './pages/TestCases/TestCaseNew';
 import { Requirements } from './pages/Requirements/Requirements';
 import { RequirementDetail } from './pages/Requirements/RequirementDetail';
+import { RequirementNew } from './pages/Requirements/RequirementNew';
 import { Environments } from './pages/Environments/Environments';
 import { EnvironmentDetail } from './pages/Environments/EnvironmentDetail';
 import { Role } from './types';
@@ -32,6 +33,9 @@ export default function App() {
               <Route path="test-cases/:id" element={<TestCaseDetail />} />
 
               <Route path="requirements" element={<Requirements />} />
+              <Route element={<ProtectedRoute allowedRoles={[Role.ADMIN, Role.EDITOR]} />}>
+                <Route path="requirements/new" element={<RequirementNew />} />
+              </Route>
               <Route path="requirements/:id" element={<RequirementDetail />} />
               
               <Route path="environments" element={<Environments />} />

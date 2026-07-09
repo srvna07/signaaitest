@@ -69,7 +69,14 @@ export function Requirements() {
           </button>
         </div>
         <div className="toolbar-right">
-          {/* Create Requirement button could go here, omitting for brevity/focus */}
+          {canEdit && (
+            <button
+              className="btn-primary"
+              onClick={() => navigate(`/projects/${projectId}/requirements/new`)}
+            >
+              + Add Requirement
+            </button>
+          )}
         </div>
       </div>
 
