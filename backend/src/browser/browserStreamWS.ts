@@ -19,6 +19,7 @@ interface StartMessage {
   environmentId: string;
   path?: string;
   scope?: 'UI' | 'API' | 'BOTH';
+  useAutoLogin?: boolean;
 }
 
 function send(ws: WebSocket, payload: object): void {
@@ -54,18 +55,27 @@ async function performLogin(
   const loginUrl = new URL(loginPath, baseUrl).toString();
   await stream.page.goto(loginUrl, { waitUntil: 'networkidle', timeout: 30000 });
 
-  // Generic login: fill the first email/username and password input, then submit
+  // Add a small pause so the user can see the page loaded
+  await stream.page.waitForTimeout(1000);
+
+  // Use 'type' with a delay so it types like a human and streams the frames to the UI
   await stream.page
-    .fill(
+    .type(
       'input[type="email"], input[name="email"], input[name="username"], input[type="text"]',
       username,
+      { delay: 50 }
     )
     .catch(() => {
       /* ignore */
     });
-  await stream.page.fill('input[type="password"]', password).catch(() => {
+    
+  await stream.page.waitForTimeout(500);
+
+  await stream.page.type('input[type="password"]', password, { delay: 50 }).catch(() => {
     /* ignore */
   });
+  
+  await stream.page.waitForTimeout(500);
   await stream.page.keyboard.press('Enter');
 
   try {
@@ -87,7 +97,13 @@ async function performLogin(
 // ─── Main orchestration ────────────────────────────────────────────────────────
 
 async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): Promise<void> {
-  const { requirementId, environmentId, path: targetPath = '', scope = 'BOTH' } = msg;
+  const {
+    requirementId,
+    environmentId,
+    path: targetPath = '',
+    scope = 'BOTH',
+    useAutoLogin = true,
+  } = msg;
 
   const [requirement, environment] = await Promise.all([
     prisma.requirement.findUnique({ where: { id: requirementId } }),
@@ -119,8 +135,9 @@ async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): 
 
   try {
     // ── Resolve cached session if available ────────────────────────────────
-    const envRequiresLogin = environment.requiresLogin;
-    const cachedSessionPath = hasSession(environmentId) ? sessionPath(environmentId) : undefined;
+    const envRequiresLogin = environment.requiresLogin && useAutoLogin;
+    const cachedSessionPath =
+      envRequiresLogin && hasSession(environmentId) ? sessionPath(environmentId) : undefined;
 
     send(ws, { type: 'status', message: 'Launching browser...' });
     await stream.start(cachedSessionPath);

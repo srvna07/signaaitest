@@ -105,7 +105,8 @@ export async function deleteProject(req: Request, res: Response): Promise<void> 
   if (hasData) {
     res.status(400).json({
       success: false,
-      error: 'Cannot delete project because it still contains environments, requirements, test cases, or secrets. Please delete them first.',
+      error:
+        'Cannot delete project because it still contains environments, requirements, test cases, or secrets. Please delete them first.',
     });
     return;
   }

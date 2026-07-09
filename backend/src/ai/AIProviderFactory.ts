@@ -32,7 +32,10 @@ class FallbackAIProvider implements AIProvider {
       console.log(`[AI] Attempting generation with primary model (${this.primaryName})...`);
       return await this.primary.generateTestCases(requirementText);
     } catch (err) {
-      console.warn(`[AI] Primary model (${this.primaryName}) failed. Falling back to secondary model (${this.secondaryName})... Error:`, err instanceof Error ? err.message : String(err));
+      console.warn(
+        `[AI] Primary model (${this.primaryName}) failed. Falling back to secondary model (${this.secondaryName})... Error:`,
+        err instanceof Error ? err.message : String(err),
+      );
       return await this.secondary.generateTestCases(requirementText);
     }
   }

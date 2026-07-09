@@ -64,6 +64,14 @@ export function RequirementDetail() {
   const [generationMode, setGenerationMode] = useState<'text' | 'browser' | null>(null);
   const [selectedEnvId, setSelectedEnvId] = useState('');
   const [explorePath, setExplorePath] = useState('');
+  const [useAutoLogin, setUseAutoLogin] = useState(true);
+
+  useEffect(() => {
+    const env = environments.find(e => e.id === selectedEnvId);
+    if (env) {
+      setUseAutoLogin(!!env.requiresLogin);
+    }
+  }, [selectedEnvId, environments]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -192,6 +200,7 @@ export function RequirementDetail() {
             environmentId: selectedEnvId,
             path: explorePath,
             scope: generationScope,
+            useAutoLogin,
           }));
         };
 
@@ -474,6 +483,18 @@ export function RequirementDetail() {
                       }}
                     />
                   </div>
+                  
+                  {environments.find(e => e.id === selectedEnvId)?.requiresLogin && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                      <input
+                        type="checkbox"
+                        checked={useAutoLogin}
+                        onChange={(e) => setUseAutoLogin(e.target.checked)}
+                      />
+                      Enable Auto-Login (Skip for testing login pages)
+                    </label>
+                  )}
+
                   <button
                     className="btn-primary"
                     onClick={() => handleGenerate('browser')}

@@ -36,9 +36,18 @@ function repairTruncatedJson(raw: string): string {
   let escape = false;
 
   for (const ch of text) {
-    if (escape) { escape = false; continue; }
-    if (ch === '\\' && inString) { escape = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
     if (inString) continue;
     if (ch === '{') openBraces++;
     else if (ch === '}') openBraces--;
@@ -111,7 +120,7 @@ ${requirementText}
       const response = await Promise.race([model.generateContent(prompt), timeoutPromise]);
 
       let text = response.response.text();
-      
+
       const firstBracket = text.indexOf('[');
       const lastBracket = text.lastIndexOf(']');
       if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
@@ -125,7 +134,7 @@ ${requirementText}
       try {
         parsedJson = JSON.parse(text);
       } catch (e) {
-        console.error("Failed to parse JSON. Raw AI output:", text);
+        console.error('Failed to parse JSON. Raw AI output:', text);
         throw new Error('Failed to parse AI response as JSON.');
       }
 
