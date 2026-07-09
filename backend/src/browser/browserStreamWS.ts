@@ -75,7 +75,7 @@ async function performLogin(
       stream.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 }),
       stream.page.waitForFunction(() => {
         const el = document.querySelector('#password') || document.querySelector('input[type="password"]');
-        return !el || el.offsetParent === null;
+        return !el || (el as any).offsetParent === null;
       }, { timeout: 15000 })
     ]);
   } catch {
@@ -205,7 +205,6 @@ async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): 
 
     // ── If cached session was used, verify we are NOT on the login page ───
     if (sessionUsed && envRequiresLogin) {
-      const loginPath = environment.loginPath || '/';
       // Navigate to target to check
       const checkUrl = new URL(targetPath, environment.baseUrl).toString();
       await stream.page.goto(checkUrl, { waitUntil: 'networkidle', timeout: 30000 });

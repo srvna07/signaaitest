@@ -17,7 +17,7 @@ const projectSchema = z.object({
 });
 
 /** GET /api/projects */
-export async function listProjects(req: Request, res: Response): Promise<void> {
+export async function listProjects(_req: Request, res: Response): Promise<void> {
   const projects = await prisma.project.findMany({
     orderBy: { createdAt: 'desc' },
   });
