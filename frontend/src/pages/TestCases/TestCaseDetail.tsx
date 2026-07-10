@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Trash2 } from 'lucide-react';
 import { apiClient } from '../../lib/apiClient';
-import { ApiResponse, TestCase } from '../../types';
+import { ApiResponse, TestCase, Environment } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { TestCaseForm, TestCaseFormData } from '../../components/TestCaseForm';
 
@@ -17,6 +17,7 @@ export function TestCaseDetail() {
   const { user } = useAuth();
   const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
   const canDelete = user?.role === 'ADMIN';
+  const canRun = canEdit || user?.role === 'RUNNER';
 
   const [isEditing, setIsEditing] = useState(false);
   const [globalError, setGlobalError] = useState('');
@@ -28,6 +29,13 @@ export function TestCaseDetail() {
   const [scriptError, setScriptError] = useState('');
   const [editingScriptText, setEditingScriptText] = useState<string | null>(null);
   const [editingScriptFormat, setEditingScriptFormat] = useState<string | null>(null);
+
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [selectedRunEnvId, setSelectedRunEnvId] = useState('');
+  const [isRunning, setIsRunning] = useState(false);
+  const [runFrame, setRunFrame] = useState('');
+  const [runResult, setRunResult] = useState<{ passed: boolean; output: string; message: string } | null>(null);
+  const [runError, setRunError] = useState('');
 
   useEffect(() => {
     if (testCase) {
@@ -121,8 +129,20 @@ export function TestCaseDetail() {
         setLoading(false);
       }
     };
+    const fetchEnvironments = async () => {
+      try {
+        const res = await apiClient.get<ApiResponse<Environment[]>>(`/environments?projectId=${projectId}`);
+        if (res.success && res.data) {
+          setEnvironments(res.data);
+          if (res.data.length > 0) setSelectedRunEnvId(res.data[0].id);
+        }
+      } catch (err) {
+        console.error('Failed to fetch environments', err);
+      }
+    };
     fetchTestCase();
-  }, [id]);
+    fetchEnvironments();
+  }, [id, projectId]);
 
   const handleDelete = async () => {
     if (
@@ -141,6 +161,61 @@ export function TestCaseDetail() {
     } catch (err: unknown) {
       setGlobalError((err as Error).message || 'Error deleting test case');
     }
+  };
+
+  const handleRun = async () => {
+    if (!selectedRunEnvId) {
+      setRunError('Please select an environment');
+      return;
+    }
+    setIsRunning(true);
+    setRunError('');
+    setRunResult(null);
+    setRunFrame('');
+
+    const token = localStorage.getItem('token');
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/browser-stream?token=${token ?? ''}`;
+    
+    const streamId = crypto.randomUUID();
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'listen_run', streamId }));
+      
+      apiClient.post<ApiResponse<{ passed: boolean; output: string }>>(`/test-cases/${id}/run`, {
+        environmentId: selectedRunEnvId,
+        streamId,
+      }).then(res => {
+        if (res.success && res.data) {
+          setRunResult({ passed: res.data.passed, output: res.data.output, message: res.data.passed ? 'Execution Passed' : 'Execution Failed' });
+        } else {
+          setRunError(res.error || 'Execution failed');
+        }
+      }).catch(err => {
+        setRunError((err as Error).message || 'Error running test case');
+      }).finally(() => {
+        setIsRunning(false);
+        ws.close();
+      });
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'frame' && msg.frame) {
+          setRunFrame(`data:image/jpeg;base64,${msg.frame}`);
+        } else if (msg.type === 'result') {
+          // handled by the POST response, but could also set here
+        } else if (msg.type === 'error') {
+          setRunError(msg.message || 'Error in stream');
+        }
+      } catch (e) {}
+    };
+
+    ws.onerror = () => {
+      setRunError('WebSocket stream connection error');
+    };
   };
 
   const handleUpdate = async (data: TestCaseFormData) => {
@@ -497,6 +572,70 @@ export function TestCaseDetail() {
                 </>
               )}
             </div>
+
+            {testCase.type === 'UI' && testCase.scriptContent && canRun && (
+              <div
+                style={{
+                  marginTop: '2.5rem',
+                  paddingTop: '2.5rem',
+                  borderTop: '1px solid var(--color-border)',
+                }}
+              >
+                <h3 style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '0.75rem' }}>
+                  RUN TEST EXECUTION
+                </h3>
+                
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+                  <select
+                    value={selectedRunEnvId}
+                    onChange={(e) => setSelectedRunEnvId(e.target.value)}
+                    className="form-input"
+                    style={{ width: '250px' }}
+                    disabled={isRunning}
+                  >
+                    <option value="" disabled>Select Environment...</option>
+                    {environments.map((env) => (
+                      <option key={env.id} value={env.id}>{env.name} ({env.type})</option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn-primary"
+                    onClick={handleRun}
+                    disabled={isRunning || !selectedRunEnvId}
+                    style={{ backgroundColor: '#10b981', borderColor: '#059669', minWidth: '100px' }}
+                  >
+                    {isRunning ? 'Running...' : 'Run Test'}
+                  </button>
+                </div>
+
+                {runError && (
+                  <div style={{ padding: '1rem', color: '#b91c1c', backgroundColor: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '4px', marginBottom: '1rem' }}>
+                    {runError}
+                  </div>
+                )}
+
+                {isRunning && runFrame && (
+                  <div style={{ position: 'relative', marginBottom: '1rem' }}>
+                    <img src={runFrame} alt="Live Run Stream" style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '4px' }} />
+                    <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.7)', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%', display: 'inline-block' }}></span>
+                      LIVE EXECUTION
+                    </div>
+                  </div>
+                )}
+
+                {runResult && (
+                  <div style={{ padding: '1.5rem', backgroundColor: runResult.passed ? '#f0fdf4' : '#fef2f2', border: `1px solid ${runResult.passed ? '#bbf7d0' : '#fca5a5'}`, borderRadius: '4px' }}>
+                    <h4 style={{ color: runResult.passed ? '#166534' : '#991b1b', marginBottom: '0.5rem', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {runResult.passed ? '✅ ' : '❌ '} {runResult.message}
+                    </h4>
+                    <pre style={{ backgroundColor: '#1e293b', color: '#f8fafc', padding: '1rem', borderRadius: '4px', fontSize: '0.8rem', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
+                      {runResult.output}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

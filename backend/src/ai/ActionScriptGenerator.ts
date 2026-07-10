@@ -51,7 +51,7 @@ ${JSON.stringify(testCase.steps, null, 2)}
 Generation Rules:
 1. For UI Test Cases (Target Format: python-playwright):
    - Generate a Python Playwright script using the sync API and a pytest-style test function (e.g. \`def test_${testCase.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}(page: Page):\`).
-   - For input fields, NEVER use \`text=\` selectors. Instead, use \`page.get_by_placeholder()\`, \`page.get_by_label()\`, or standard CSS selectors like \`page.locator('input[type="..."]')\`. Only use \`text=\` for clicking buttons or links.
+   - For input fields, NEVER use \`text=\` selectors and AVOID \`page.get_by_placeholder()\` because modern UI frameworks often use floating labels instead of actual HTML placeholder attributes. Instead, use \`page.get_by_label()\`, \`page.get_by_role('textbox', name='...')\`, or standard CSS selectors like \`page.locator('input[type="email"]')\`. Only use \`text=\` for clicking buttons or links.
    - Assert page visibility or text using Playwright expectations: \`expect(page.locator(...)).to_be_visible()\`.
    - To assert URLs, use Playwright's built-in \`expect(page).to_have_url(re.compile(r".*..."))\`. Do NOT use \`expect(page.url).to_contain\`.
    - Include standard imports: \`import os\`, \`import re\`, \`from playwright.sync_api import Page, expect\`.

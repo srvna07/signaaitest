@@ -3,6 +3,13 @@ import { z } from 'zod';
 import { TestCaseType } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { ActionScriptGenerator } from '../ai/ActionScriptGenerator';
+import { chromium } from 'playwright';
+import { spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { testRunStreams } from '../browser/browserStreamWS';
+import { decryptSecret } from '../utils/crypto';
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 
@@ -456,4 +463,134 @@ export async function deleteActionScript(req: Request, res: Response): Promise<v
   await writeAuditLog(userId, 'delete_script', 'TestCase', updated.id);
 
   res.json({ success: true, data: updated });
+}
+
+/** POST /api/test-cases/:id/run */
+export async function runTestCase(req: Request, res: Response): Promise<void> {
+  const { environmentId, streamId } = req.body;
+  if (!environmentId) {
+    res.status(400).json({ success: false, error: 'environmentId is required' });
+    return;
+  }
+
+  const testCase = await prisma.testCase.findUnique({
+    where: { id: req.params.id },
+  });
+
+  if (!testCase || !testCase.scriptContent || testCase.type !== 'UI') {
+    res.status(404).json({ success: false, error: 'Executable UI script not found' });
+    return;
+  }
+
+  const environment = await prisma.environment.findUnique({
+    where: { id: environmentId },
+  });
+
+  if (!environment) {
+    res.status(404).json({ success: false, error: 'Environment not found' });
+    return;
+  }
+
+  // Gather environment secrets
+  const secrets = await prisma.secret.findMany({
+    where: { environmentId },
+  });
+  
+  const envVars: Record<string, string> = {
+    ...process.env,
+    BASE_URL: environment.baseUrl,
+  };
+  for (const s of secrets) {
+    envVars[`SECRET_${s.name}`] = decryptSecret(s.encryptedValue);
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'signa-run-'));
+  const scriptPath = path.join(tmpDir, 'test_script.py');
+  const conftestPath = path.join(tmpDir, 'conftest.py');
+
+  fs.writeFileSync(scriptPath, testCase.scriptContent);
+
+  const ws = streamId ? testRunStreams.get(streamId) : undefined;
+  let browserNode: any = null;
+  let cdpPort = 9225 + Math.floor(Math.random() * 500);
+
+  if (ws) {
+    try {
+      browserNode = await chromium.launch({ headless: true, args: [`--remote-debugging-port=${cdpPort}`] });
+      const contextNode = await browserNode.newContext();
+      const pageNode = await contextNode.newPage();
+      const cdp = await pageNode.context().newCDPSession(pageNode);
+      
+      cdp.on('Page.screencastFrame', ({ data, sessionId }: any) => {
+        if (ws.readyState === 1) { // WebSocket.OPEN
+          ws.send(JSON.stringify({ type: 'frame', frame: data }));
+        }
+        cdp.send('Page.screencastFrameAck', { sessionId }).catch(() => {});
+      });
+      await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 80, everyNthFrame: 1 });
+
+      fs.writeFileSync(conftestPath, `
+import pytest
+import os
+from playwright.sync_api import sync_playwright
+
+@pytest.fixture(scope="session")
+def playwright_instance():
+    with sync_playwright() as p:
+        yield p
+
+@pytest.fixture(scope="session")
+def browser(playwright_instance):
+    cdp = os.environ.get("PW_CDP_ENDPOINT")
+    browser = playwright_instance.chromium.connect_over_cdp(cdp)
+    yield browser
+
+@pytest.fixture
+def context(browser):
+    ctx = browser.contexts[0]
+    yield ctx
+
+@pytest.fixture
+def page(context):
+    p = context.pages[0] if context.pages else context.new_page()
+    yield p
+      `);
+      envVars.PW_CDP_ENDPOINT = 'http://localhost:' + cdpPort;
+    } catch (e) {
+      console.error("Failed to start CDP proxy", e);
+    }
+  }
+
+  const child = spawn('pytest', [scriptPath, '-s'], {
+    env: envVars,
+    cwd: tmpDir,
+  });
+
+  let output = '';
+  child.stdout.on('data', d => output += d.toString());
+  child.stderr.on('data', d => output += d.toString());
+
+  child.on('close', async (code) => {
+    if (browserNode) {
+      await browserNode.close().catch(() => {});
+    }
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+
+    const passed = code === 0;
+    
+    // Parse output for a simple pass/fail message
+    let statusMsg = passed ? 'Test execution passed successfully.' : 'Test execution failed.';
+    
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ type: 'result', passed, output, message: statusMsg }));
+    }
+
+    res.json({
+      success: true,
+      data: {
+        passed,
+        output,
+      }
+    });
+  });
 }

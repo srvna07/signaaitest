@@ -19,7 +19,7 @@ import {
 // ─── Message shapes ────────────────────────────────────────────────────────────
 
 interface StartMessage {
-  type: 'start';
+  type: 'start' | 'listen_run';
   requirementId: string;
   environmentId: string;
   path?: string;
@@ -27,6 +27,8 @@ interface StartMessage {
   useAutoLogin?: boolean;
   strategy?: 'single-shot' | 'agentic';
 }
+
+export const testRunStreams = new Map<string, WebSocket>();
 
 function send(ws: WebSocket, payload: object): void {
   if (ws.readyState === WebSocket.OPEN) {
@@ -568,9 +570,14 @@ export function attachBrowserStreamWS(httpServer: Server): WebSocketServer {
             : rawData instanceof ArrayBuffer
               ? Buffer.from(rawData).toString('utf-8')
               : String(rawData);
-        const msg = JSON.parse(rawStr) as StartMessage;
+        const msg = JSON.parse(rawStr) as StartMessage & { streamId?: string };
+        if (msg.type === 'listen_run' && msg.streamId) {
+          testRunStreams.set(msg.streamId, ws);
+          ws.on('close', () => testRunStreams.delete(msg.streamId!));
+          return;
+        }
         if (msg.type !== 'start') {
-          send(ws, { type: 'error', message: 'First message must be {type:"start",...}' });
+          send(ws, { type: 'error', message: 'First message must be start or listen_run' });
           ws.close();
           return;
         }

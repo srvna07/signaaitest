@@ -13,6 +13,7 @@ import {
   generateActionScript,
   updateActionScript,
   deleteActionScript,
+  runTestCase,
 } from '../controllers/testCase.controller';
 
 const router = Router();
@@ -51,6 +52,12 @@ router.delete(
   '/:id/script',
   authorize(Role.ADMIN, Role.EDITOR),
   (req, res) => void deleteActionScript(req, res),
+);
+
+router.post(
+  '/:id/run',
+  authorize(Role.ADMIN, Role.EDITOR, Role.RUNNER),
+  (req, res) => void runTestCase(req, res),
 );
 
 export default router;
