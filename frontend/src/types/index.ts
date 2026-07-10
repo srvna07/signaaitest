@@ -54,6 +54,8 @@ export interface TestCase {
   requirement?: { id: string; title: string } | null;
   scriptFormat?: string | null;
   scriptContent?: string | null;
+  domSnapshot?: string | null;
+  domSnapshotCapturedAt?: string | null;
 }
 
 export interface ApiResponse<T> {

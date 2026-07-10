@@ -230,7 +230,6 @@ export async function generateFromBrowser(req: Request, res: Response): Promise<
 
     await browser.close();
 
-    // Force Gemini for vision
     const gemini = new GeminiProvider();
 
     const suggestions = await gemini.generateTestCasesFromBrowser(
@@ -240,9 +239,21 @@ export async function generateFromBrowser(req: Request, res: Response): Promise<
       scope,
     );
 
+    let truncatedDomTree = domTree;
+    if (truncatedDomTree.length > 200000) {
+      truncatedDomTree = truncatedDomTree.substring(0, 200000) + '\n... [TRUNCATED - EXCEEDED MAX SIZE]';
+    }
+
+    const suggestionsWithDom = suggestions.map((s: any) => {
+      if (s.type === 'UI') {
+        return { ...s, domSnapshot: truncatedDomTree };
+      }
+      return s;
+    });
+
     res.json({
       success: true,
-      data: suggestions,
+      data: suggestionsWithDom,
       screenshot: `data:image/png;base64,${screenshotBase64}`,
     });
   } catch (error: unknown) {

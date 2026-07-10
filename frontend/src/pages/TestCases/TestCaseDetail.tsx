@@ -479,6 +479,17 @@ export function TestCaseDetail() {
                   </button>
                 )}
               </div>
+              
+              {testCase.domSnapshotCapturedAt && (new Date().getTime() - new Date(testCase.domSnapshotCapturedAt).getTime()) > 7 * 24 * 60 * 60 * 1000 && (
+                <div style={{ backgroundColor: '#fffbeb', color: '#b45309', padding: '0.75rem', borderRadius: '4px', border: '1px solid #fde68a', marginBottom: '1rem', fontSize: '0.85rem' }}>
+                  ⚠️ This script is based on a page snapshot from {Math.floor((new Date().getTime() - new Date(testCase.domSnapshotCapturedAt).getTime()) / (1000 * 60 * 60 * 24))} days ago — the real page may have changed.
+                </div>
+              )}
+              {!testCase.domSnapshot && (
+                <div style={{ backgroundColor: '#f8fafc', color: '#475569', padding: '0.75rem', borderRadius: '4px', border: '1px solid #e2e8f0', marginBottom: '1rem', fontSize: '0.85rem' }}>
+                  ℹ️ No DOM snapshot exists for this test case. The AI will attempt to guess selectors based on the human-readable steps.
+                </div>
+              )}
 
               {generatingScript && (
                 <div

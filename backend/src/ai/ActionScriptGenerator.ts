@@ -7,6 +7,7 @@ export interface ActionScriptTestCase {
   preconditions?: string | null;
   steps: unknown;
   expectedResult: string;
+  domSnapshot?: string | null;
 }
 
 export class ActionScriptGenerator {
@@ -47,6 +48,7 @@ Test Case Details:
 - Steps:
 ${JSON.stringify(testCase.steps, null, 2)}
 - Expected Result: ${testCase.expectedResult}
+${testCase.domSnapshot ? `\n- Reference DOM Snapshot (Use this to find exact CSS/text selectors instead of guessing):\n\`\`\`html\n${testCase.domSnapshot}\n\`\`\`\n` : ''}
 
 Generation Rules:
 1. For UI Test Cases (Target Format: python-playwright):

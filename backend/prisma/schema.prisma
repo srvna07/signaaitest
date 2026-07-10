@@ -113,6 +113,8 @@ model TestCase {
   // Designed as an open string field to allow future extensibility (e.g. "typescript-playwright") without a schema change.
   scriptFormat   String?      @map("script_format")
   scriptContent  String?      @map("script_content")
+  domSnapshot    String?      @db.Text @map("dom_snapshot")
+  domSnapshotCapturedAt DateTime? @map("dom_snapshot_captured_at")
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 

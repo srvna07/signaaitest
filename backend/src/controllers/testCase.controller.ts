@@ -27,6 +27,7 @@ const createSchema = z.object({
   preconditions: z.string().optional(),
   expectedResult: z.string().min(1, 'Expected result is required'),
   requirementId: z.string().uuid('requirementId must be a valid UUID').optional(),
+  domSnapshot: z.string().optional(),
 });
 
 const updateSchema = createSchema.omit({ projectId: true }).partial();
@@ -204,8 +205,13 @@ export async function bulkCreateTestCases(req: Request, res: Response): Promise<
       }
     }
 
+    const dataToSave: any = { ...rest, requirementId: requirementId ?? null, createdBy: userId };
+    if (rest.domSnapshot) {
+      dataToSave.domSnapshotCapturedAt = new Date();
+    }
+
     const testCase = await prisma.testCase.create({
-      data: { ...rest, requirementId: requirementId ?? null, createdBy: userId },
+      data: dataToSave,
       include: includeDetail,
     });
 
@@ -358,6 +364,7 @@ export async function generateActionScript(req: Request, res: Response): Promise
       preconditions: testCase.preconditions,
       steps: testCase.steps,
       expectedResult: testCase.expectedResult,
+      domSnapshot: testCase.domSnapshot,
     });
 
     // Compile step text to find passwords and credentials mentioned in human descriptions
