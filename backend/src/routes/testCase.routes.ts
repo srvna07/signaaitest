@@ -12,6 +12,7 @@ import {
   bulkDeleteTestCases,
   generateActionScript,
   updateActionScript,
+  deleteActionScript,
 } from '../controllers/testCase.controller';
 
 const router = Router();
@@ -44,6 +45,12 @@ router.put(
   '/:id/script',
   authorize(Role.ADMIN, Role.EDITOR),
   (req, res) => void updateActionScript(req, res),
+);
+
+router.delete(
+  '/:id/script',
+  authorize(Role.ADMIN, Role.EDITOR),
+  (req, res) => void deleteActionScript(req, res),
 );
 
 export default router;

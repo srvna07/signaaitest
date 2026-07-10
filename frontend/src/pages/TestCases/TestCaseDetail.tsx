@@ -23,6 +23,8 @@ export function TestCaseDetail() {
 
   const [generatingScript, setGeneratingScript] = useState(false);
   const [savingScript, setSavingScript] = useState(false);
+  const [isDeletingScript, setIsDeletingScript] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [scriptError, setScriptError] = useState('');
   const [editingScriptText, setEditingScriptText] = useState<string | null>(null);
   const [editingScriptFormat, setEditingScriptFormat] = useState<string | null>(null);
@@ -58,6 +60,7 @@ export function TestCaseDetail() {
     if (!editingScriptText || !editingScriptFormat) return;
     setSavingScript(true);
     setScriptError('');
+    setSaveSuccess(false);
     try {
       const res = await apiClient.put<ApiResponse<TestCase>>(`/test-cases/${id}/script`, {
         format: editingScriptFormat,
@@ -65,6 +68,8 @@ export function TestCaseDetail() {
       });
       if (res.success && res.data) {
         setTestCase(res.data);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
       } else {
         setScriptError(res.error || 'Failed to save script');
       }
@@ -72,6 +77,26 @@ export function TestCaseDetail() {
       setScriptError((err as Error).message || 'Error saving script');
     } finally {
       setSavingScript(false);
+    }
+  };
+
+  const handleDeleteScript = async () => {
+    if (!window.confirm('Are you sure you want to delete the configured action script?')) return;
+    setIsDeletingScript(true);
+    setScriptError('');
+    try {
+      const res = await apiClient.delete<ApiResponse<TestCase>>(`/test-cases/${id}/script`);
+      if (res.success && res.data) {
+        setTestCase(res.data);
+        setEditingScriptText(null);
+        setEditingScriptFormat(null);
+      } else {
+        setScriptError(res.error || 'Failed to delete script');
+      }
+    } catch (err: unknown) {
+      setScriptError((err as Error).message || 'Error deleting script');
+    } finally {
+      setIsDeletingScript(false);
     }
   };
 
@@ -418,7 +443,7 @@ export function TestCaseDetail() {
                         disabled={!canEdit}
                       />
                       {canEdit && (
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', alignItems: 'center' }}>
                           <button
                             className="btn-primary"
                             onClick={handleSaveScript}
@@ -427,6 +452,16 @@ export function TestCaseDetail() {
                           >
                             {savingScript ? 'Saving...' : 'Save Script'}
                           </button>
+                          {testCase.scriptContent && (
+                            <button
+                              className="btn-secondary"
+                              onClick={handleDeleteScript}
+                              disabled={isDeletingScript}
+                              style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem', color: '#dc2626', borderColor: '#fca5a5' }}
+                            >
+                              {isDeletingScript ? 'Deleting...' : 'Delete Script'}
+                            </button>
+                          )}
                           <button
                             className="btn-secondary"
                             onClick={() => {
@@ -437,6 +472,9 @@ export function TestCaseDetail() {
                           >
                             Reset
                           </button>
+                          {saveSuccess && (
+                            <span style={{ fontSize: '0.85rem', color: '#16a34a', marginLeft: '0.5rem' }}>✓ Saved successfully!</span>
+                          )}
                         </div>
                       )}
                     </div>

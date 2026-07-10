@@ -432,3 +432,28 @@ export async function updateActionScript(req: Request, res: Response): Promise<v
   await writeAuditLog(userId, 'save_script', 'TestCase', existing.id);
   res.json({ success: true, data: updated });
 }
+
+/** DELETE /api/test-cases/:id/script */
+export async function deleteActionScript(req: Request, res: Response): Promise<void> {
+  const existing = await prisma.testCase.findUnique({
+    where: { id: req.params.id },
+  });
+
+  if (!existing) {
+    res.status(404).json({ success: false, error: 'Test case not found' });
+    return;
+  }
+
+  const userId = req.user!.userId;
+  const updated = await prisma.testCase.update({
+    where: { id: req.params.id },
+    data: {
+      scriptFormat: null,
+      scriptContent: null,
+    },
+  });
+
+  await writeAuditLog(userId, 'delete_script', 'TestCase', updated.id);
+
+  res.json({ success: true, data: updated });
+}
