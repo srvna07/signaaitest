@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+﻿/* eslint-disable no-console */
 import { IncomingMessage } from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import { Server } from 'http';
@@ -6,17 +6,12 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { prisma } from '../config/prisma';
 import { JwtPayload } from '../middlewares/authenticate';
-import { LiveBrowserStream } from '../browser/LiveBrowserStream';
-import { GeminiProvider } from '../ai/providers/GeminiProvider';
 import { decryptSecret } from '../utils/crypto';
+import { LiveBrowserStream } from '../browser/LiveBrowserStream';
 import { hasSession, sessionPath, deleteSession, saveSession } from '../browser/sessionCache';
-import {
-  McpAgentExplorer,
-  generateTestCasesFromTranscript,
-  resolveCredentials,
-} from '../browser/McpAgentExplorer';
+import { GeminiProvider } from '../ai/providers/GeminiProvider';
 
-// ─── Message shapes ────────────────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ Message shapes ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
 interface StartMessage {
   type: 'start';
@@ -25,7 +20,6 @@ interface StartMessage {
   path?: string;
   scope?: 'UI' | 'API' | 'BOTH';
   useAutoLogin?: boolean;
-  strategy?: 'single-shot' | 'agentic';
 }
 
 function send(ws: WebSocket, payload: object): void {
@@ -34,7 +28,7 @@ function send(ws: WebSocket, payload: object): void {
   }
 }
 
-// ─── JWT auth from query string ────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ JWT auth from query string ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
 function authenticateRequest(req: IncomingMessage): JwtPayload | null {
   try {
@@ -47,223 +41,9 @@ function authenticateRequest(req: IncomingMessage): JwtPayload | null {
   }
 }
 
-// ─── Auto-login via MCP agent ──────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ Auto-login helper ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
-
-
-// ─── Main orchestration ────────────────────────────────────────────────────────
-
-async function handleSessionAgentic(ws: WebSocket, msg: StartMessage, userId: string): Promise<void> {
-  const {
-    requirementId,
-    environmentId,
-    path: targetPath = '',
-    scope = 'BOTH',
-    useAutoLogin = true,
-  } = msg;
-
-  const [requirement, environment] = await Promise.all([
-    prisma.requirement.findUnique({ where: { id: requirementId } }),
-    prisma.environment.findUnique({ where: { id: environmentId } }),
-  ]);
-
-  if (!requirement) {
-    send(ws, { type: 'error', message: 'Requirement not found' });
-    ws.close();
-    return;
-  }
-  if (!environment) {
-    send(ws, { type: 'error', message: 'Environment not found' });
-    ws.close();
-    return;
-  }
-
-  const explorer = new McpAgentExplorer();
-  let sessionUsed = false;
-
-  // ── Pipe all frames to the WebSocket client (same as before) ──────────
-  explorer.on('frame', (frameBase64: string) => {
-    let currentUrl = '';
-    const p = explorer.page;
-    if (p) {
-      try {
-        currentUrl = p.url();
-      } catch {
-        // ignore
-      }
-    }
-    send(ws, { type: 'frame', frame: frameBase64, url: currentUrl });
-  });
-
-  ws.on('close', () => {
-    void explorer.stop();
-  });
-
-  try {
-    // ── Resolve cached session if available ────────────────────────────
-    const envRequiresLogin = environment.requiresLogin && useAutoLogin;
-    const cachedSessionPath =
-      envRequiresLogin && hasSession(environmentId) ? sessionPath(environmentId) : undefined;
-
-    send(ws, { type: 'status', message: 'Launching browser with MCP agent...' });
-    await explorer.start(cachedSessionPath);
-
-    if (cachedSessionPath) {
-      sessionUsed = true;
-      send(ws, { type: 'status', message: 'Loaded cached session — skipping login.' });
-    }
-
-    // ── Resolve login credentials (NEVER sent to AI) ───────────────────
-    let loginUsername = '';
-    let loginPassword = '';
-
-    if (envRequiresLogin) {
-      const creds = await resolveCredentials(environment, environmentId);
-      loginUsername = creds.username;
-      loginPassword = creds.password;
-
-      if (!cachedSessionPath) {
-        if (!loginUsername || !loginPassword) {
-          send(ws, {
-            type: 'error',
-            message: 'Credentials cannot be empty. Please configure Auto-Login settings.',
-          });
-          await explorer.stop();
-          ws.close();
-          return;
-        }
-
-        send(ws, { type: 'status', message: 'Starting adaptive exploration from login page...' });
-      }
-    }
-
-    // ── If cached session was used, verify it's still valid ───────────
-    if (sessionUsed && envRequiresLogin) {
-      const checkUrl = new URL(targetPath, environment.baseUrl).toString();
-      const page = explorer.page;
-      if (page) {
-        await page.goto(checkUrl, { waitUntil: 'networkidle', timeout: 30000 });
-        const passwordInput = await page.$('input[type="password"]').catch(() => null);
-        if (passwordInput && (await passwordInput.isVisible().catch(() => false))) {
-          send(ws, { type: 'status', message: 'Cached session expired. Starting fresh exploration...' });
-          deleteSession(environmentId);
-          // Don't close WS, just proceed with fresh exploration
-          sessionUsed = false;
-        }
-      }
-    }
-    
-    const isFreshLogin = envRequiresLogin && !sessionUsed;
-      const shouldNavigate = targetPath && targetPath !== '/';
-      const page = explorer.page;
-
-      if ((!isFreshLogin || shouldNavigate) && page) {
-        const finalPath = targetPath || '/';
-        send(ws, { type: 'status', message: `Navigating to ${finalPath}...` });
-        const fullUrl = new URL(finalPath, environment.baseUrl).toString();
-        await page.goto(fullUrl, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => {});
-      } else if (page) {
-        send(ws, { type: 'status', message: 'Staying on dashboard after login...' });
-      }
-
-    // ── Run MCP agentic exploration loop ───────────────────────────────
-    send(ws, { type: 'status', message: 'Starting adaptive MCP exploration...' });
-
-    const requirementText = `Title: ${requirement.title}\nDescription: ${requirement.description}`;
-
-    const explorationResult = await explorer.explore({
-      requirementText,
-      baseUrl: environment.baseUrl,
-      targetPath: isFreshLogin ? (environment.loginPath || '/') : (targetPath || '/'),
-      scope,
-      environmentId,
-      loginUsername: isFreshLogin ? loginUsername || undefined : undefined,
-      loginPassword: isFreshLogin ? loginPassword || undefined : undefined,
-      userId,
-      onStatus: (statusMsg) => send(ws, { type: 'status', message: statusMsg }),
-    });
-
-    if (isFreshLogin && !explorationResult.cutShort) {
-      // Save session for next time if exploration succeeded
-      const page = explorer.page;
-      if (page) {
-        const storageState = await page.context().storageState();
-        saveSession(environmentId, JSON.stringify(storageState));
-      }
-    }
-
-    // ── Generate test cases from transcript ────────────────────────────
-    send(ws, { type: 'status', message: 'Compiling test case suggestions from exploration...' });
-
-    const { testCases, cutShort, cutShortReason } = await generateTestCasesFromTranscript(
-      requirementText,
-      explorationResult,
-      scope,
-    );
-
-    // ── Capture final screenshot for the result preview ────────────────
-    let finalScreenshotBase64 = '';
-    const lastStopWithScreenshot = [...explorationResult.stops]
-      .reverse()
-      .find((s) => s.screenshotBase64);
-    if (lastStopWithScreenshot?.screenshotBase64) {
-      finalScreenshotBase64 = lastStopWithScreenshot.screenshotBase64;
-    } else {
-      // Fallback: take a PNG screenshot from page
-      const page = explorer.page;
-      if (page) {
-        try {
-          const buf = await page.screenshot({ type: 'png' });
-          finalScreenshotBase64 = buf.toString('base64');
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-
-    // ── Deliver results (same shape as before — no frontend changes needed) ──
-    send(ws, {
-      type: 'result',
-      data: testCases,
-      screenshot: finalScreenshotBase64
-        ? `data:image/png;base64,${finalScreenshotBase64}`
-        : undefined,
-      explorationMeta: {
-        turns: explorationResult.turns,
-        cutShort,
-        cutShortReason,
-        inputTokens: explorationResult.totalInputTokens,
-        outputTokens: explorationResult.totalOutputTokens,
-        stops: explorationResult.stops.length,
-      },
-    });
-
-    if (cutShort) {
-      send(ws, {
-        type: 'status',
-        message: `⚠ Note: Exploration was cut short (${cutShortReason}). Test cases reflect the explored portion only.`,
-      });
-    }
-
-    await prisma.auditLog.create({
-      data: {
-        userId,
-        action: 'ws_mcp_browser_generate',
-        entityType: 'Requirement',
-        entityId: requirementId,
-      },
-    });
-  } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[WS MCP browser-stream] Error:', errMsg);
-    send(ws, { type: 'error', message: errMsg });
-  } finally {
-    await explorer.stop();
-    ws.close();
-  }
-}
-
-async function performSingleShotLogin(
+async function performLogin(
   stream: LiveBrowserStream,
   baseUrl: string,
   loginPath: string,
@@ -324,7 +104,9 @@ async function performSingleShotLogin(
   return true;
 }
 
-async function handleSessionSingleShot(ws: WebSocket, msg: StartMessage, userId: string): Promise<void> {
+// ΓöÇΓöÇΓöÇ Main orchestration ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): Promise<void> {
   const {
     requirementId,
     environmentId,
@@ -418,7 +200,7 @@ async function handleSessionSingleShot(ws: WebSocket, msg: StartMessage, userId:
         return;
       }
 
-      const loginOk = await performSingleShotLogin(
+      const loginOk = await performLogin(
         stream,
         environment.baseUrl,
         loginPath,
@@ -538,16 +320,7 @@ async function handleSessionSingleShot(ws: WebSocket, msg: StartMessage, userId:
   }
 }
 
-
-async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): Promise<void> {
-  if (msg.strategy === 'single-shot') {
-    return handleSessionSingleShot(ws, msg, userId);
-  }
-  return handleSessionAgentic(ws, msg, userId);
-}
-
-
-// ─── WebSocket server bootstrap ────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ WebSocket server bootstrap ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
 export function attachBrowserStreamWS(httpServer: Server): WebSocketServer {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/browser-stream' });

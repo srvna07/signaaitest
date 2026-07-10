@@ -62,7 +62,7 @@ export function RequirementDetail() {
   // Generation Options State
   const [showGenerationOptions, setShowGenerationOptions] = useState(false);
   const [generationScope, setGenerationScope] = useState<'UI' | 'API' | 'BOTH'>('BOTH');
-  const [generationMode, setGenerationMode] = useState<'text' | 'browser' | null>(null);
+  const [generationMode, setGenerationMode] = useState<'text' | 'browser-single' | 'browser-agentic' | null>(null);
   const [selectedEnvId, setSelectedEnvId] = useState('');
   const [explorePath, setExplorePath] = useState('');
   const [useAutoLogin, setUseAutoLogin] = useState(true);
@@ -158,7 +158,7 @@ export function RequirementDetail() {
     }
   };
 
-  const handleGenerate = async (mode: 'text' | 'browser') => {
+  const handleGenerate = async (mode: 'text' | 'browser-single' | 'browser-agentic') => {
     setIsGenerating(true);
     setGenerateError('');
     setSaveSuccess(false);
@@ -204,6 +204,7 @@ export function RequirementDetail() {
               path: explorePath,
               scope: generationScope,
               useAutoLogin,
+              strategy: mode === 'browser-agentic' ? 'agentic' : 'single-shot',
             }),
           );
         };
@@ -370,14 +371,23 @@ export function RequirementDetail() {
                   onClick={() => setGenerationMode('text')}
                 >
                   <Wand2 size={16} style={{ marginRight: '0.5rem', display: 'inline' }} />
-                  Generate from requirement text
+                  Generate from text
                 </button>
                 <button
-                  className={generationMode === 'browser' ? 'btn-primary' : 'btn-secondary'}
-                  onClick={() => setGenerationMode('browser')}
+                  className={generationMode === 'browser-single' ? 'btn-primary' : 'btn-secondary'}
+                  onClick={() => setGenerationMode('browser-single')}
+                  title="Analyzes one page (lower token cost)"
                 >
                   <Globe size={16} style={{ marginRight: '0.5rem', display: 'inline' }} />
-                  Generate by exploring a live URL
+                  Live URL (Single-Page)
+                </button>
+                <button
+                  className={generationMode === 'browser-agentic' ? 'btn-primary' : 'btn-secondary'}
+                  onClick={() => setGenerationMode('browser-agentic')}
+                  title="AI clicks through pages (higher token cost)"
+                >
+                  <Globe size={16} style={{ marginRight: '0.5rem', display: 'inline' }} />
+                  Agent Exploration
                 </button>
               </div>
 
@@ -447,7 +457,7 @@ export function RequirementDetail() {
                 </button>
               )}
 
-              {generationMode === 'browser' && (
+              {(generationMode === 'browser-single' || generationMode === 'browser-agentic') && (
                 <div
                   style={{
                     display: 'flex',
@@ -516,10 +526,10 @@ export function RequirementDetail() {
 
                   <button
                     className="btn-primary"
-                    onClick={() => handleGenerate('browser')}
+                    onClick={() => handleGenerate(generationMode as 'browser-single' | 'browser-agentic')}
                     style={{ alignSelf: 'flex-start' }}
                   >
-                    Start exploration
+                    Start {generationMode === 'browser-agentic' ? 'exploration' : 'analysis'}
                   </button>
                 </div>
               )}
@@ -680,7 +690,7 @@ export function RequirementDetail() {
                   backgroundColor: '#f8fafc',
                 }}
               >
-                {generationMode === 'browser' ? 'Launching browser...' : 'Generating test cases...'}
+                {generationMode === 'text' ? 'Generating test cases...' : 'Launching browser...'}
               </div>
             )}
           </div>

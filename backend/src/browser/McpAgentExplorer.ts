@@ -21,9 +21,10 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import {
   GoogleGenerativeAI,
   Content,
-  Part,
   Tool,
   FunctionDeclaration,
+  SchemaType,
+  Part,
 } from '@google/generative-ai';
 import { z } from 'zod';
 import { chromium, Browser, BrowserContext, CDPSession, Page } from 'playwright';
@@ -272,7 +273,7 @@ export class McpAgentExplorer extends EventEmitter {
         '--no-sandbox',
         '--isolated',
       ],
-      env: { ...process.env },
+      env: { ...process.env } as Record<string, string>,
     });
 
     const client = new Client({ name: 'signa-ai-mcp-client', version: '1.0.0' });
@@ -381,10 +382,10 @@ export class McpAgentExplorer extends EventEmitter {
         'gathered sufficient information to generate meaningful test cases for the given requirement. ' +
         'Do NOT call this prematurely — make sure you have seen all key flows.',
       parameters: {
-        type: 'object',
+        type: SchemaType.OBJECT,
         properties: {
           reason: {
-            type: 'string',
+            type: SchemaType.STRING,
             description: 'Brief explanation of why exploration is complete.',
           },
         },
