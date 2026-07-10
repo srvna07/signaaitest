@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate, useParams, Link } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { LayoutDashboard, FileCheck2, Server, LogOut, FolderGit2 } from 'lucide-react';
 import styles from './Layout.module.css';

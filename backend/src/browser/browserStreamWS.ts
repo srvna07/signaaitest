@@ -6,10 +6,12 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { prisma } from '../config/prisma';
 import { JwtPayload } from '../middlewares/authenticate';
-import { decryptSecret } from '../utils/crypto';
-import { LiveBrowserStream } from '../browser/LiveBrowserStream';
 import { hasSession, sessionPath, deleteSession, saveSession } from '../browser/sessionCache';
-import { GeminiProvider } from '../ai/providers/GeminiProvider';
+import {
+  McpAgentExplorer,
+  generateTestCasesFromTranscript,
+  resolveCredentials,
+} from '../browser/McpAgentExplorer';
 
 // ─── Message shapes ────────────────────────────────────────────────────────────
 
@@ -41,51 +43,53 @@ function authenticateRequest(req: IncomingMessage): JwtPayload | null {
   }
 }
 
-// ─── Auto-login helper ─────────────────────────────────────────────────────────
+// ─── Auto-login via MCP agent ──────────────────────────────────────────────────
 
-async function performLogin(
-  stream: LiveBrowserStream,
+async function performMcpLogin(
+  explorer: McpAgentExplorer,
   baseUrl: string,
   loginPath: string,
   username: string,
   password: string,
   ws: WebSocket,
 ): Promise<boolean> {
-  send(ws, { type: 'status', message: 'Logging in automatically...' });
+  send(ws, { type: 'status', message: 'Logging in automatically (MCP agent)...' });
+
   const loginUrl = new URL(loginPath, baseUrl).toString();
-  await stream.page.goto(loginUrl, { waitUntil: 'networkidle', timeout: 30000 });
+  const page = explorer.page;
+  if (!page) return false;
 
-  // Wait for the form to actually render in the React DOM before typing!
-  await stream.page
+  await page.goto(loginUrl, { waitUntil: 'networkidle', timeout: 30000 });
+
+  await page
     .waitForSelector('#username', { timeout: 15000 })
-    .catch((e) => console.error('[DEBUG] waitForSelector failed:', e.message));
-  await stream.page.waitForTimeout(500); // Visual buffer
+    .catch((e: Error) => console.error('[DEBUG] waitForSelector failed:', e.message));
+  await page.waitForTimeout(500);
 
-  // Forcefully fill the exact inputs
-  await stream.page
+  await page
     .fill('#username', username)
-    .catch((e) => console.error('[DEBUG] fill username failed:', e.message));
-  await stream.page.waitForTimeout(500);
-  await stream.page
+    .catch((e: Error) => console.error('[DEBUG] fill username failed:', e.message));
+  await page.waitForTimeout(500);
+  await page
     .fill('#password', password)
-    .catch((e) => console.error('[DEBUG] fill password failed:', e.message));
+    .catch((e: Error) => console.error('[DEBUG] fill password failed:', e.message));
+  await page.waitForTimeout(500);
 
-  await stream.page.waitForTimeout(500);
-  await stream.page.click('button[type="submit"], button:has-text("Login")').catch(async (e) => {
+  await page.click('button[type="submit"], button:has-text("Login")').catch(async (e: Error) => {
     console.error('[DEBUG] click login button failed:', e.message);
-    await stream.page.keyboard
+    await page.keyboard
       .press('Enter')
-      .catch((e2) => console.error('[DEBUG] press Enter failed:', e2.message));
+      .catch((e2: Error) => console.error('[DEBUG] press Enter failed:', e2.message));
   });
 
   try {
     await Promise.race([
-      stream.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 }),
-      stream.page.waitForFunction(
+      page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 }),
+      page.waitForFunction(
         () => {
           const el =
             document.querySelector('#password') || document.querySelector('input[type="password"]');
-          return !el || (el as any).offsetParent === null;
+          return !el || (el as HTMLElement).offsetParent === null;
         },
         { timeout: 15000 },
       ),
@@ -94,10 +98,9 @@ async function performLogin(
     /* ignore timeout */
   }
 
-  // Check if password field is still visible (robust check for SPAs)
-  const passwordInput = await stream.page.$('#password, input[type="password"]').catch(() => null);
+  const passwordInput = await page.$('#password, input[type="password"]').catch(() => null);
   if (passwordInput && (await passwordInput.isVisible().catch(() => false))) {
-    return false; // login failed
+    return false;
   }
 
   send(ws, { type: 'status', message: 'Login successful. Caching session...' });
@@ -131,191 +134,216 @@ async function handleSession(ws: WebSocket, msg: StartMessage, userId: string): 
     return;
   }
 
-  const stream = new LiveBrowserStream();
+  const explorer = new McpAgentExplorer();
   let sessionUsed = false;
 
-  // Pipe all frames to the WebSocket client
-  stream.on('frame', (frameBase64: string) => {
+  // ── Pipe all frames to the WebSocket client (same as before) ──────────
+  explorer.on('frame', (frameBase64: string) => {
     let currentUrl = '';
-    try {
-      currentUrl = stream.page.url();
-    } catch {}
+    const p = explorer.page;
+    if (p) {
+      try {
+        currentUrl = p.url();
+      } catch {
+        // ignore
+      }
+    }
     send(ws, { type: 'frame', frame: frameBase64, url: currentUrl });
   });
 
   ws.on('close', () => {
-    void stream.stop();
+    void explorer.stop();
   });
 
   try {
-    // ── Resolve cached session if available ────────────────────────────────
+    // ── Resolve cached session if available ────────────────────────────
     const envRequiresLogin = environment.requiresLogin && useAutoLogin;
     const cachedSessionPath =
       envRequiresLogin && hasSession(environmentId) ? sessionPath(environmentId) : undefined;
 
-    send(ws, { type: 'status', message: 'Launching browser...' });
-    await stream.start(cachedSessionPath);
+    send(ws, { type: 'status', message: 'Launching browser with MCP agent...' });
+    await explorer.start(cachedSessionPath);
+
     if (cachedSessionPath) {
       sessionUsed = true;
       send(ws, { type: 'status', message: 'Loaded cached session — skipping login.' });
     }
 
-    // ── Auto-login if needed ───────────────────────────────────────────────
-    if (envRequiresLogin && !cachedSessionPath) {
-      const loginPath = environment.loginPath || '/';
+    // ── Resolve login credentials (NEVER sent to AI) ───────────────────
+    let loginUsername = '';
+    let loginPassword = '';
 
-      // Resolve secrets
-      let username = '';
-      let password = '';
+    if (envRequiresLogin) {
+      const creds = await resolveCredentials(environment, environmentId);
+      loginUsername = creds.username;
+      loginPassword = creds.password;
 
-      if (environment.loginUsernameSecret) {
-        const usernameSecret = await prisma.secret.findFirst({
-          where: { name: environment.loginUsernameSecret, environmentId },
-        });
-        if (usernameSecret) {
-          username = decryptSecret(usernameSecret.encryptedValue);
-        } else {
-          username = environment.loginUsernameSecret; // fallback to raw string
+      if (!cachedSessionPath) {
+        // Perform login via direct page interaction (same proven approach as original)
+        if (!loginUsername || !loginPassword) {
+          send(ws, {
+            type: 'error',
+            message: 'Credentials cannot be empty. Please configure Auto-Login settings.',
+          });
+          await explorer.stop();
+          ws.close();
+          return;
+        }
+
+        const loginOk = await performMcpLogin(
+          explorer,
+          environment.baseUrl,
+          environment.loginPath || '/',
+          loginUsername,
+          loginPassword,
+          ws,
+        );
+
+        if (!loginOk) {
+          send(ws, { type: 'error', message: 'Auto-login failed. Check credentials.' });
+          await explorer.stop();
+          ws.close();
+          return;
+        }
+
+        // Log that login happened (real creds never touched the AI)
+        await prisma.auditLog
+          .create({
+            data: {
+              userId,
+              action: 'mcp_auto_login',
+              entityType: 'Environment',
+              entityId: environmentId,
+            },
+          })
+          .catch(() => {});
+
+        // Save session for next time
+        const page = explorer.page;
+        if (page) {
+          const storageState = await page.context().storageState();
+          saveSession(environmentId, JSON.stringify(storageState));
         }
       }
-
-      if (environment.loginPasswordSecret) {
-        const passwordSecret = await prisma.secret.findFirst({
-          where: { name: environment.loginPasswordSecret, environmentId },
-        });
-        if (passwordSecret) {
-          password = decryptSecret(passwordSecret.encryptedValue);
-        } else {
-          password = environment.loginPasswordSecret; // fallback to raw string
-        }
-      }
-
-      if (!username || !password) {
-        send(ws, {
-          type: 'error',
-          message: 'Credentials cannot be empty. Please configure Auto-Login settings.',
-        });
-        await stream.stop();
-        ws.close();
-        return;
-      }
-
-      const loginOk = await performLogin(
-        stream,
-        environment.baseUrl,
-        loginPath,
-        username,
-        password,
-        ws,
-      );
-      if (!loginOk) {
-        send(ws, { type: 'error', message: 'Auto-login failed. Check credentials.' });
-        await stream.stop();
-        ws.close();
-        return;
-      }
-
-      // Save session
-      const storageState = await stream.page.context().storageState();
-      saveSession(environmentId, JSON.stringify(storageState));
     }
 
-    // ── If cached session was used, verify we are NOT on the login page ───
+    // ── If cached session was used, verify it's still valid ───────────
     if (sessionUsed && envRequiresLogin) {
-      // Navigate to target to check
       const checkUrl = new URL(targetPath, environment.baseUrl).toString();
-      await stream.page.goto(checkUrl, { waitUntil: 'networkidle', timeout: 30000 });
-      const passwordInput = await stream.page
-        .$('#password, input[type="password"]')
-        .catch(() => null);
-      if (passwordInput && (await passwordInput.isVisible().catch(() => false))) {
-        send(ws, { type: 'status', message: 'Cached session expired. Re-logging in...' });
-        deleteSession(environmentId);
-        // We can't re-start stream, so close and let caller retry
-        send(ws, {
-          type: 'error',
-          message: 'Session expired. Please retry — a fresh login will be performed.',
-        });
-        await stream.stop();
-        ws.close();
-        return;
+      const page = explorer.page;
+      if (page) {
+        await page.goto(checkUrl, { waitUntil: 'networkidle', timeout: 30000 });
+        const passwordInput = await page.$('#password, input[type="password"]').catch(() => null);
+        if (passwordInput && (await passwordInput.isVisible().catch(() => false))) {
+          send(ws, { type: 'status', message: 'Cached session expired. Re-logging in...' });
+          deleteSession(environmentId);
+          send(ws, {
+            type: 'error',
+            message: 'Session expired. Please retry — a fresh login will be performed.',
+          });
+          await explorer.stop();
+          ws.close();
+          return;
+        }
       }
     } else {
       const isFreshLogin = envRequiresLogin && !cachedSessionPath;
       const shouldNavigate = targetPath && targetPath !== '/';
+      const page = explorer.page;
 
-      if (!isFreshLogin || shouldNavigate) {
+      if ((!isFreshLogin || shouldNavigate) && page) {
         const finalPath = targetPath || '/';
         send(ws, { type: 'status', message: `Navigating to ${finalPath}...` });
         const fullUrl = new URL(finalPath, environment.baseUrl).toString();
-        await stream.page
-          .goto(fullUrl, { waitUntil: 'networkidle', timeout: 30000 })
-          .catch(() => {});
-      } else {
+        await page.goto(fullUrl, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => {});
+      } else if (page) {
         send(ws, { type: 'status', message: 'Staying on dashboard after login...' });
       }
     }
 
-    send(ws, { type: 'status', message: 'Page loaded. Taking screenshot and analysing...' });
+    // ── Run MCP agentic exploration loop ───────────────────────────────
+    send(ws, { type: 'status', message: 'Starting adaptive MCP exploration...' });
 
-    // ── Capture page data for AI ───────────────────────────────────────────
-    const screenshotBuffer = await stream.page.screenshot({ type: 'png' });
-    const screenshotBase64 = screenshotBuffer.toString('base64');
-
-    const domTree = await stream.page.evaluate(() => {
-      const elements = Array.from(document.querySelectorAll('button, a, input, select, textarea'));
-      return elements
-        .map((el) => {
-          const htmlEl = el as HTMLElement;
-          const inputEl = el as HTMLInputElement;
-          const tag = htmlEl.tagName.toLowerCase();
-          const text =
-            htmlEl.textContent?.trim().replace(/\s+/g, ' ') ||
-            inputEl.value ||
-            inputEl.placeholder ||
-            '';
-          const idStr = htmlEl.id ? `#${htmlEl.id}` : '';
-          const typeStr = inputEl.type ? `[type="${inputEl.type}"]` : '';
-          const nameStr = inputEl.name ? `[name="${inputEl.name}"]` : '';
-          return `${tag}${idStr}${typeStr}${nameStr} -> "${text}"`;
-        })
-        .filter((s) => !s.endsWith('-> ""'))
-        .join('\n');
-    });
-
-    // ── Call Gemini (vision required) ─────────────────────────────────────
-    send(ws, { type: 'status', message: 'Sending to AI for analysis...' });
-    const gemini = new GeminiProvider();
     const requirementText = `Title: ${requirement.title}\nDescription: ${requirement.description}`;
 
-    const suggestions = await gemini.generateTestCasesFromBrowser(
+    const explorationResult = await explorer.explore({
       requirementText,
-      screenshotBase64,
-      domTree,
+      baseUrl: environment.baseUrl,
+      targetPath: targetPath || '/',
+      scope,
+      environmentId,
+      loginUsername: loginUsername || undefined,
+      loginPassword: loginPassword || undefined,
+      onStatus: (statusMsg) => send(ws, { type: 'status', message: statusMsg }),
+    });
+
+    // ── Generate test cases from transcript ────────────────────────────
+    send(ws, { type: 'status', message: 'Compiling test case suggestions from exploration...' });
+
+    const { testCases, cutShort, cutShortReason } = await generateTestCasesFromTranscript(
+      requirementText,
+      explorationResult,
       scope,
     );
 
-    // ── Deliver results ────────────────────────────────────────────────────
+    // ── Capture final screenshot for the result preview ────────────────
+    let finalScreenshotBase64 = '';
+    const lastStopWithScreenshot = [...explorationResult.stops]
+      .reverse()
+      .find((s) => s.screenshotBase64);
+    if (lastStopWithScreenshot?.screenshotBase64) {
+      finalScreenshotBase64 = lastStopWithScreenshot.screenshotBase64;
+    } else {
+      // Fallback: take a PNG screenshot from page
+      const page = explorer.page;
+      if (page) {
+        try {
+          const buf = await page.screenshot({ type: 'png' });
+          finalScreenshotBase64 = buf.toString('base64');
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    // ── Deliver results (same shape as before — no frontend changes needed) ──
     send(ws, {
       type: 'result',
-      data: suggestions,
-      screenshot: `data:image/png;base64,${screenshotBase64}`,
+      data: testCases,
+      screenshot: finalScreenshotBase64
+        ? `data:image/png;base64,${finalScreenshotBase64}`
+        : undefined,
+      explorationMeta: {
+        turns: explorationResult.turns,
+        cutShort,
+        cutShortReason,
+        inputTokens: explorationResult.totalInputTokens,
+        outputTokens: explorationResult.totalOutputTokens,
+        stops: explorationResult.stops.length,
+      },
     });
+
+    if (cutShort) {
+      send(ws, {
+        type: 'status',
+        message: `⚠ Note: Exploration was cut short (${cutShortReason}). Test cases reflect the explored portion only.`,
+      });
+    }
 
     await prisma.auditLog.create({
       data: {
         userId,
-        action: 'ws_browser_generate',
+        action: 'ws_mcp_browser_generate',
         entityType: 'Requirement',
         entityId: requirementId,
       },
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[WS browser-stream] Error:', msg);
-    send(ws, { type: 'error', message: msg });
+    const errMsg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[WS MCP browser-stream] Error:', errMsg);
+    send(ws, { type: 'error', message: errMsg });
   } finally {
-    await stream.stop();
+    await explorer.stop();
     ws.close();
   }
 }

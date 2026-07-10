@@ -21,7 +21,7 @@ export const getSecrets = async (req: Request, res: Response): Promise<void> => 
     const environmentId = req.query.environment_id as string | undefined;
     const projectId = req.query.projectId as string | undefined;
 
-    const where: any = {};
+    const where: { environmentId?: string; projectId?: string } = {};
     if (environmentId) where.environmentId = environmentId;
     if (projectId) where.projectId = projectId;
 

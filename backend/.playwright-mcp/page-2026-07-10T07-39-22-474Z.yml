@@ -1,0 +1,29 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - img "Auth Illustration" [ref=e6]
+    - heading "Welcome to Signa Insights!" [level=4] [ref=e7]
+    - paragraph [ref=e8]: Get started with Signa Insights today.
+    - button "Contact Us" [ref=e9] [cursor=pointer]
+  - generic [ref=e11]:
+    - img "Signa Insights" [ref=e13]
+    - generic [ref=e14]:
+      - heading "Welcome back" [level=5] [ref=e15]
+      - paragraph [ref=e16]: Please sign in to continue to your dashboard.
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - generic: Username
+          - generic [ref=e19]:
+            - textbox "Username" [ref=e20]
+            - group:
+              - generic: Username
+        - generic [ref=e21]:
+          - generic: Password
+          - generic [ref=e22]:
+            - textbox "Password" [ref=e23]
+            - button [ref=e25] [cursor=pointer]
+            - group:
+              - generic: Password
+        - button "Login" [ref=e28] [cursor=pointer]
+        - heading [level=6] [ref=e29]:
+          - text: Forgot Password?
+          - button "Click here" [ref=e30] [cursor=pointer]
