@@ -64,8 +64,9 @@ Generation Rules:
 CRITICAL SECURITY AND DEPLOYMENT RULES:
 - The base URL of the target environment MUST be read directly from the environment variable \`BASE_URL\` using exactly \`os.environ["BASE_URL"]\`. Do NOT provide a fallback value like "https://example.com", and do NOT hardcode the full target domain directly in the test calls.
 - NEVER include literal hardcoded secrets, passwords, API keys, or tokens in the code.
-- If a step mentions credentials or secrets, they MUST be loaded dynamically from environment variables using a clear naming convention: \`os.environ["SECRET_<NAME>"]\` or \`os.environ.get("SECRET_<NAME>")\` (e.g. \`os.environ["SECRET_DEV_PASSWORD"]\`).
-- Add a comment above every credential loading line stating: \`# Note: Injected by the execution engine at runtime\`.
+- If a step requires valid credentials or real secrets, they MUST be loaded dynamically from environment variables using a clear naming convention: \`os.environ["SECRET_<NAME>"]\` (e.g. \`os.environ["SECRET_DEV_PASSWORD"]\`).
+- For invalid, fake, or incorrect credentials, DO NOT use environment variables. Simply hardcode dummy strings directly in the script (e.g., \`invalid_username = "baduser"\`).
+- Add a comment above every real credential loading line stating: \`# Note: Injected by the execution engine at runtime\`.
 - You MUST include a comment header in the script noting: \`# AI-generated test script from test case ID: ${testCase.id}\`.
 
 Output only the Python code. Do not wrap the output in markdown code blocks. Start directly with the Python code (e.g. \`import os\`).

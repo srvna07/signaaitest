@@ -263,7 +263,9 @@ function checkNoHardcodedSecrets(
       !val.startsWith('os.environ') &&
       !val.startsWith('os.getenv') &&
       !val.startsWith('env') &&
-      val.trim().length > 0
+      val.trim().length > 0 &&
+      !/invalid|fake|wrong|bad|dummy/i.test(val) &&
+      !/invalid|fake|wrong|bad|dummy/i.test(varMatch[0])
     ) {
       return {
         safe: false,
@@ -277,11 +279,14 @@ function checkNoHardcodedSecrets(
   let fillMatch;
   while ((fillMatch = fillRegex.exec(script)) !== null) {
     const selector = fillMatch[1];
+    const value = fillMatch[2];
     if (/(password|pwd|secret|token|key|credential)/i.test(selector)) {
-      return {
-        safe: false,
-        error: `Hardcoded secret value detected in .fill() call for selector: ${selector}`,
-      };
+      if (!/invalid|fake|wrong|bad|dummy/i.test(value)) {
+        return {
+          safe: false,
+          error: `Hardcoded secret value detected in .fill() call for selector: ${selector}`,
+        };
+      }
     }
   }
 
@@ -310,7 +315,11 @@ function checkNoHardcodedSecrets(
     let strMatch;
     while ((strMatch = stringLiteralRegex.exec(script)) !== null) {
       const literal = strMatch[1];
-      if (literal.length >= 6 && testCaseText.includes(literal)) {
+      if (
+        literal.length >= 6 && 
+        testCaseText.includes(literal) &&
+        !/invalid|fake|wrong|bad|dummy/i.test(literal)
+      ) {
         const contextRegex = new RegExp(
           `(password|secret|pwd|token|key|pass|credentials?)\\s+(is|to|with|of|equals?)?\\s*['"]?${literal.replace(/[-\\^$*+?.()|[\]{}]/g, '\\$&')}`,
           'i',
@@ -521,6 +530,12 @@ export async function runTestCase(req: Request, res: Response): Promise<void> {
       const pageNode = await contextNode.newPage();
       const cdp = await pageNode.context().newCDPSession(pageNode);
       
+      pageNode.on('framenavigated', (frame: any) => {
+        if (frame === pageNode.mainFrame() && ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'url', url: frame.url() }));
+        }
+      });
+
       cdp.on('Page.screencastFrame', ({ data, sessionId }: any) => {
         if (ws.readyState === 1) { // WebSocket.OPEN
           ws.send(JSON.stringify({ type: 'frame', frame: data }));

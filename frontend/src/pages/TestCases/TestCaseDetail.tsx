@@ -34,6 +34,7 @@ export function TestCaseDetail() {
   const [selectedRunEnvId, setSelectedRunEnvId] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [runFrame, setRunFrame] = useState('');
+  const [runUrl, setRunUrl] = useState('');
   const [runResult, setRunResult] = useState<{ passed: boolean; output: string; message: string } | null>(null);
   const [runError, setRunError] = useState('');
 
@@ -172,7 +173,8 @@ export function TestCaseDetail() {
     setRunError('');
     setRunResult(null);
     setRunFrame('');
-
+    setRunUrl('');
+    
     const token = localStorage.getItem('token');
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${window.location.host}/ws/browser-stream?token=${token ?? ''}`;
@@ -205,6 +207,8 @@ export function TestCaseDetail() {
         const msg = JSON.parse(event.data);
         if (msg.type === 'frame' && msg.frame) {
           setRunFrame(`data:image/jpeg;base64,${msg.frame}`);
+        } else if (msg.type === 'url' && msg.url) {
+          setRunUrl(msg.url);
         } else if (msg.type === 'result') {
           // handled by the POST response, but could also set here
         } else if (msg.type === 'error') {
@@ -616,8 +620,13 @@ export function TestCaseDetail() {
 
                 {isRunning && runFrame && (
                   <div style={{ position: 'relative', marginBottom: '1rem' }}>
-                    <img src={runFrame} alt="Live Run Stream" style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '4px' }} />
-                    <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.7)', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {runUrl && (
+                      <div style={{ backgroundColor: '#f1f5f9', padding: '0.5rem 1rem', border: '1px solid #e2e8f0', borderBottom: 'none', borderTopLeftRadius: '4px', borderTopRightRadius: '4px', fontSize: '0.875rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.5rem', wordBreak: 'break-all' }}>
+                        <span style={{ color: '#94a3b8' }}>🔗</span> {runUrl}
+                      </div>
+                    )}
+                    <img src={runFrame} alt="Live Run Stream" style={{ width: '100%', border: '1px solid #e2e8f0', borderTopLeftRadius: runUrl ? '0' : '4px', borderTopRightRadius: runUrl ? '0' : '4px', borderBottomLeftRadius: '4px', borderBottomRightRadius: '4px', display: 'block' }} />
+                    <div style={{ position: 'absolute', top: runUrl ? '48px' : '10px', right: '10px', background: 'rgba(0,0,0,0.7)', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%', display: 'inline-block' }}></span>
                       LIVE EXECUTION
                     </div>
