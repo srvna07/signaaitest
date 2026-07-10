@@ -62,7 +62,7 @@ Generation Rules:
    - Include standard imports: \`import os\`, \`import requests\`.
 
 CRITICAL SECURITY AND DEPLOYMENT RULES:
-- The base URL of the target environment MUST be read from the environment variable \`BASE_URL\` using \`os.environ.get("BASE_URL", "...")\` or \`os.environ["BASE_URL"]\`. Do not hardcode the full target domain/origin directly in the test calls.
+- The base URL of the target environment MUST be read directly from the environment variable \`BASE_URL\` using exactly \`os.environ["BASE_URL"]\`. Do NOT provide a fallback value like "https://example.com", and do NOT hardcode the full target domain directly in the test calls.
 - NEVER include literal hardcoded secrets, passwords, API keys, or tokens in the code.
 - If a step mentions credentials or secrets, they MUST be loaded dynamically from environment variables using a clear naming convention: \`os.environ["SECRET_<NAME>"]\` or \`os.environ.get("SECRET_<NAME>")\` (e.g. \`os.environ["SECRET_DEV_PASSWORD"]\`).
 - Add a comment above every credential loading line stating: \`# Note: Injected by the execution engine at runtime\`.
